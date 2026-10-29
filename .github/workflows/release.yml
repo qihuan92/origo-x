@@ -1,0 +1,315 @@
+name: Android release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to build and release (for example v2.7.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.44.4"
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  verify-release:
+    name: Verify release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Verify tag matches pubspec version
+        shell: bash
+        run: |
+          release_version="${RELEASE_TAG#v}"
+          pubspec_version="$(sed -n 's/^version:[[:space:]]*\([^+[:space:]]*\).*/\1/p' pubspec.yaml)"
+
+          if [[ "$RELEASE_TAG" != v* || -z "$pubspec_version" ]]; then
+            echo "::error::Release tags must use v<version> and pubspec.yaml must declare a version."
+            exit 1
+          fi
+
+          if [[ "$release_version" != "$pubspec_version" ]]; then
+            echo "::error::Tag ${RELEASE_TAG} does not match pubspec version ${pubspec_version}."
+            exit 1
+          fi
+
+  android:
+    name: Android APKs
+    needs: verify-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Prepare Android release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for variable in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Required Android signing secret is missing: ${variable}"
+              exit 1
+            fi
+          done
+
+          keystore_path="${RUNNER_TEMP}/origo-x-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Build release APKs
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release --split-per-abi
+
+      - name: Verify APK signing identity
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          export LC_ALL=C
+          apksigner_path="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [[ -z "$apksigner_path" ]]; then
+            echo "::error::apksigner was not found in the Android SDK."
+            exit 1
+          fi
+
+          expected_digest="$(
+            keytool -list -v \
+              -keystore "$ANDROID_KEYSTORE_PATH" \
+              -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+              -alias "$ANDROID_KEY_ALIAS" 2>/dev/null \
+              | sed -n 's/^[[:space:]]*SHA256: //p' \
+              | head -n 1 \
+              | tr -d ':' \
+              | tr '[:upper:]' '[:lower:]'
+          )"
+
+          if [[ -z "$expected_digest" ]]; then
+            echo "::error::Could not read the configured signing certificate."
+            exit 1
+          fi
+
+          for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
+            "$apksigner_path" verify --verbose "$apk" >/dev/null
+            actual_digest="$(
+              "$apksigner_path" verify --print-certs "$apk" \
+                | sed -n -E 's/^.*(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: //p' \
+                | head -n 1 \
+                | tr -d ':' \
+                | tr '[:upper:]' '[:lower:]'
+            )"
+
+            if [[ -z "$actual_digest" || "$actual_digest" != "$expected_digest" ]]; then
+              echo "::error::$(basename "$apk") was not signed with the configured identity."
+              echo "expected=${expected_digest}"
+              echo "actual=${actual_digest}"
+              exit 1
+            fi
+          done
+
+      - name: Name Android packages
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          mkdir -p release-assets
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            "release-assets/OpenReading-Android-arm64-v8a-${version}.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            "release-assets/OpenReading-Android-armeabi-v7a-${version}.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk \
+            "release-assets/OpenReading-Android-x86_64-${version}.apk"
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-release
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${ANDROID_KEYSTORE_PATH:-}" ]]; then
+            rm -f "$ANDROID_KEYSTORE_PATH"
+          fi
+
+  publish:
+    name: Publish GitHub Release
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release metadata
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: android-release
+          path: release-assets
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum ./* > SHA256SUMS.txt
+
+      - name: Verify Android asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          expected_files=(
+            "OpenReading-Android-arm64-v8a-${version}.apk"
+            "OpenReading-Android-armeabi-v7a-${version}.apk"
+            "OpenReading-Android-x86_64-${version}.apk"
+            "SHA256SUMS.txt"
+          )
+          expected_list="${RUNNER_TEMP}/expected-release-assets.txt"
+          current_list="${RUNNER_TEMP}/current-release-assets.txt"
+          printf '%s\n' "${expected_files[@]}" | LC_ALL=C sort > "$expected_list"
+          find release-assets -maxdepth 1 -type f -printf '%f\n' \
+            | LC_ALL=C sort > "$current_list"
+          if ! cmp --silent "$expected_list" "$current_list"; then
+            echo "::error::The current build produced an unexpected release asset set."
+            diff --unified "$expected_list" "$current_list" || true
+            exit 1
+          fi
+
+          release_metadata_path="${RUNNER_TEMP}/existing-release.json"
+          encoded_tag="$(
+            python3 -c \
+              'import os, urllib.parse; print(urllib.parse.quote(os.environ["RELEASE_TAG"], safe=""))'
+          )"
+          http_code="$(
+            curl --silent --show-error \
+              --output "$release_metadata_path" \
+              --write-out '%{http_code}' \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GH_REPO}/releases/tags/${encoded_tag}"
+          )"
+
+          case "$http_code" in
+            200)
+              ;;
+            404)
+              echo "RELEASE_ALREADY_EXISTS=false" >> "$GITHUB_ENV"
+              echo "No existing release uses ${RELEASE_TAG}; a new Android asset set will be published."
+              exit 0
+              ;;
+            *)
+              echo "::error::Could not query release ${RELEASE_TAG} (HTTP ${http_code})."
+              exit 1
+              ;;
+          esac
+
+          echo "RELEASE_ALREADY_EXISTS=true" >> "$GITHUB_ENV"
+          echo "::error::Release ${RELEASE_TAG} already exists. Refusing to replace published assets."
+          exit 1
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          release_url="https://github.com/${GH_REPO}/releases/download/${RELEASE_TAG}"
+          notes_file="${RUNNER_TEMP}/release-notes.md"
+          custom_notes_file=".github/release-notes/${RELEASE_TAG}.md"
+
+          if [[ -f "$custom_notes_file" ]]; then
+            cat "$custom_notes_file" > "$notes_file"
+          else
+            printf '开元阅读 %s\n' "$RELEASE_TAG" > "$notes_file"
+          fi
+
+          python3 - "$notes_file" "$version" "$release_url" "$RELEASE_TAG" <<'PY'
+          import pathlib, sys, textwrap
+          path, version, release_url, tag = sys.argv[1:]
+          appendix = textwrap.dedent(
+              f"""
+
+              ## 下载
+
+              | 平台 | 下载 |
+              | --- | --- |
+              | Android | [ARM64-v8a]({release_url}/OpenReading-Android-arm64-v8a-{version}.apk) · [ARMv7]({release_url}/OpenReading-Android-armeabi-v7a-{version}.apk) · [x86_64]({release_url}/OpenReading-Android-x86_64-{version}.apk) |
+
+              - Android arm64-v8a 适合绝大多数现代 Android 设备；ARMv7 适合较旧的 32 位设备；x86_64 适合模拟器或少数 x86_64 设备。
+              - [SHA-256 校验清单]({release_url}/SHA256SUMS.txt)
+
+              此 Release 由 GitHub Actions 从 Tag `{tag}` 自动构建，只包含正式签名的 Android 安装包。
+              """
+          ).lstrip("\n")
+          with pathlib.Path(path).open("a", encoding="utf-8") as notes:
+              notes.write(appendix)
+          PY
+
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --title "开元阅读 ${RELEASE_TAG}" \
+            --notes-file "$notes_file" \
+            --latest
+
+      - name: Show published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release view "$RELEASE_TAG"

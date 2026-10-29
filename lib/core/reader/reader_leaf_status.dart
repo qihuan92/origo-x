@@ -21,7 +21,7 @@ class MethodChannelReaderBatteryStatusSource
   const MethodChannelReaderBatteryStatusSource();
 
   static const MethodChannel _channel = MethodChannel(
-    'org.example.xxread/reader_status',
+    'com.niki.xxread/reader_status',
   );
 
   @override
@@ -66,9 +66,11 @@ class ReaderLeafStatusData {
 class ReaderLeafStatusController extends ChangeNotifier
     with WidgetsBindingObserver {
   ReaderLeafStatusController({
-    this._batterySource = const MethodChannelReaderBatteryStatusSource(),
+    ReaderBatteryStatusSource batterySource =
+        const MethodChannelReaderBatteryStatusSource(),
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now,
+  }) : _batterySource = batterySource,
+       _now = now ?? DateTime.now,
        _value = ReaderLeafStatusData(
          time: _minute(now?.call() ?? DateTime.now()),
          revision: 0,

@@ -1,12 +1,12 @@
-# Origo X licensing
+# Open Reading licensing
 
-Origo X is licensed under the GNU Affero General Public License version
+Open Reading is licensed under the GNU Affero General Public License version
 3.0 (`AGPL-3.0-only`) from revisions after commit
 `456a3ab5c852aed8f45f5387cfd638839109bfb7` onward. See [LICENSE](LICENSE).
 
 ## Earlier MIT revisions
 
-Origo X releases through `v1.0.0`, and repository revisions up to and
+Open Reading releases through `v1.0.0`, and repository revisions up to and
 including commit `456a3ab5c852aed8f45f5387cfd638839109bfb7`, were published under the MIT
 License. Rights already granted under the MIT License are not revoked. The
 historical license text is preserved in [LICENSE-MIT-LEGACY](LICENSE-MIT-LEGACY).
@@ -20,7 +20,7 @@ service over a network, users interacting with it must also be offered the
 complete corresponding source as required by section 13 of AGPL-3.0.
 
 Third-party dependencies and separately identified files remain subject to
-their own licenses. The Origo Source Protocol repository is a separate
+their own licenses. The Open Reading Source Protocol repository is a separate
 project and remains licensed under the MIT License.
 
 Bundled font files remain under the SIL Open Font License 1.1. Their source,

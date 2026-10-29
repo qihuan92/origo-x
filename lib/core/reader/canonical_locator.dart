@@ -436,7 +436,6 @@ class CanonicalLocator {
     int? positionHint,
     int? totalPositionsHint,
     List<String> fragments = const [],
-    String? contentSignature,
   }) {
     final href = _buildTextAnchorHref(
       chapterId: chapterId,
@@ -462,7 +461,6 @@ class CanonicalLocator {
       totalPositionsHint: totalPositionsHint,
       fragments: fragments,
       textAnchor: textAnchor,
-      contentSignature: contentSignature,
     );
   }
 

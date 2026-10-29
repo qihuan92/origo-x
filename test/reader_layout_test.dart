@@ -28,14 +28,12 @@ void main() {
       int indent = 2,
       int spacing = 0,
       double letterSpacing = 0,
-      int fontWeight = 400,
       TextAlign textAlign = TextAlign.start,
       TextDirection direction = TextDirection.ltr,
     }) => ReaderLayoutFingerprint(
       contentKey: 'chapter-1',
       viewport: const Size(360, 720),
       fontSize: 19,
-      fontWeight: fontWeight,
       lineHeight: 1.75,
       letterSpacing: letterSpacing,
       textAlign: textAlign,
@@ -53,7 +51,6 @@ void main() {
     expect(base, isNot(fingerprint(indent: 0).cacheKey('reader-v4')));
     expect(base, isNot(fingerprint(spacing: 1).cacheKey('reader-v4')));
     expect(base, isNot(fingerprint(letterSpacing: 0.4).cacheKey('reader-v4')));
-    expect(base, isNot(fingerprint(fontWeight: 600).cacheKey('reader-v4')));
     expect(
       base,
       isNot(fingerprint(textAlign: TextAlign.justify).cacheKey('reader-v4')),

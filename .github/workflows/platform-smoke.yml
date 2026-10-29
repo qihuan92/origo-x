@@ -1,0 +1,65 @@
+name: Android smoke build
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/platform-smoke.yml"
+      - "android/**"
+      - "assets/**"
+      - "lib/**"
+      - "pubspec.lock"
+      - "pubspec.yaml"
+      - "shaders/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/platform-smoke.yml"
+      - "android/**"
+      - "assets/**"
+      - "lib/**"
+      - "pubspec.lock"
+      - "pubspec.yaml"
+      - "shaders/**"
+  schedule:
+    # Monday 02:17 in Asia/Shanghai (Sunday 18:17 UTC).
+    - cron: "17 18 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.44.4"
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install locked dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Build Android debug APK
+        run: flutter build apk --debug

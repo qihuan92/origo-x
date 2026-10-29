@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show immutable;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import 'reader_text_characters.dart';
@@ -16,6 +16,47 @@ const TextAlign readerBodyTextAlign = TextAlign.start;
 /// chrome remains outside this flow and continues to follow platform
 /// accessibility settings.
 const TextScaler readerBodyTextScaler = TextScaler.noScaling;
+
+const List<String> _iosSimplifiedChineseSystemFallbacks = <String>[
+  'PingFang SC',
+  'PingFang TC',
+];
+const List<String> _iosTraditionalChineseSystemFallbacks = <String>[
+  'PingFang TC',
+  'PingFang SC',
+];
+
+/// Keeps the platform-default reader font while making iOS CJK resolution
+/// deterministic.
+///
+/// Impeller can otherwise resolve Chinese glyph runs through different
+/// fallback faces when [fontFamily] is null, which makes adjacent glyphs look
+/// uneven even though their configured font size is identical. PingFang is
+/// the native iOS Chinese system face, so this does not bundle or download a
+/// replacement font.
+List<String>? readerFontFamilyFallbacks({
+  required String? fontFamily,
+  required List<String> configuredFallbacks,
+  Locale? locale,
+}) {
+  if (configuredFallbacks.isNotEmpty) return configuredFallbacks;
+  if (fontFamily != null ||
+      kIsWeb ||
+      defaultTargetPlatform != TargetPlatform.iOS) {
+    return null;
+  }
+  if (locale?.languageCode.toLowerCase() != 'zh') return null;
+  final scriptCode = locale?.scriptCode?.toLowerCase();
+  final countryCode = locale?.countryCode?.toUpperCase();
+  final usesTraditionalChinese =
+      scriptCode == 'hant' ||
+      countryCode == 'TW' ||
+      countryCode == 'HK' ||
+      countryCode == 'MO';
+  return usesTraditionalChinese
+      ? _iosTraditionalChineseSystemFallbacks
+      : _iosSimplifiedChineseSystemFallbacks;
+}
 
 /// 行高只作用于行与行之间：首行上方、末行下方不再垫行距，
 /// 这样"上/下边距"就是从字形边缘量起，不随行高设置漂移。
@@ -118,51 +159,45 @@ class NativeTextPaginator {
     required NativeTextSpanBuilder spanBuilder,
     int sourceOffset = 0,
     double? firstPageHeight,
-  }) => paginatePages(
-    text: text,
-    spanBuilder: spanBuilder,
-    sourceOffset: sourceOffset,
-    firstPageHeight: firstPageHeight,
-  ).toList(growable: false);
-
-  /// Measures pages lazily so callers can yield to the event loop between
-  /// pages without maintaining a second pagination algorithm.
-  Iterable<NativeTextPageRange> paginatePages({
-    required String text,
-    required NativeTextSpanBuilder spanBuilder,
-    int sourceOffset = 0,
-    double? firstPageHeight,
-  }) sync* {
+  }) {
     final resolvedFirstPageHeight = firstPageHeight ?? maxHeight;
     if (text.isEmpty ||
         maxWidth <= 0 ||
         maxHeight <= 0 ||
         resolvedFirstPageHeight <= 0) {
-      return;
+      return const <NativeTextPageRange>[];
     }
 
+    final pages = <NativeTextPageRange>[];
     var pageStart = 0;
-    var pageCount = 0;
     while (pageStart < text.length) {
       final visibleStart = _firstVisiblePageOffset(text, pageStart);
       if (visibleStart >= text.length) {
-        // A measured page always claims a whitespace-only tail below, so this
-        // branch is the all-whitespace chapter case.
-        assert(pageStart == 0);
-        yield NativeTextPageRange(
-          start: pageStart,
-          end: text.length,
-          visibleStart: text.length,
-          visibleEnd: text.length,
-          lineCount: 0,
-        );
-        pageStart = text.length;
-        pageCount++;
+        if (pages.isEmpty) {
+          pages.add(
+            NativeTextPageRange(
+              start: pageStart,
+              end: text.length,
+              visibleStart: text.length,
+              visibleEnd: text.length,
+              lineCount: 0,
+            ),
+          );
+        } else {
+          final previous = pages.removeLast();
+          pages.add(
+            NativeTextPageRange(
+              start: previous.start,
+              end: text.length,
+              visibleStart: previous.visibleStart,
+              visibleEnd: previous.visibleEnd,
+              lineCount: previous.lineCount,
+            ),
+          );
+        }
         break;
       }
-      final pageMaxHeight = pageCount == 0
-          ? resolvedFirstPageHeight
-          : maxHeight;
+      final pageMaxHeight = pages.isEmpty ? resolvedFirstPageHeight : maxHeight;
       final candidates = _lineEndCandidates(
         text: text,
         pageStart: visibleStart,
@@ -206,19 +241,24 @@ class NativeTextPaginator {
       final ownsTrailingWhitespace =
           _firstVisiblePageOffset(text, selected.end) >= text.length;
       final pageEnd = ownsTrailingWhitespace ? text.length : selected.end;
-      yield NativeTextPageRange(
-        start: pageStart,
-        end: pageEnd,
-        visibleStart: visibleStart,
-        visibleEnd: selected.end,
-        lineCount: selected.lineCount,
+      pages.add(
+        NativeTextPageRange(
+          start: pageStart,
+          end: pageEnd,
+          visibleStart: visibleStart,
+          visibleEnd: selected.end,
+          lineCount: selected.lineCount,
+        ),
       );
       pageStart = pageEnd;
-      pageCount++;
     }
 
-    assert(pageCount > 0);
-    assert(pageStart == text.length);
+    assert(pages.first.start == 0);
+    assert(pages.last.end == text.length);
+    for (var i = 1; i < pages.length; i++) {
+      assert(pages[i - 1].end == pages[i].start);
+    }
+    return pages;
   }
 
   List<int> _lineEndCandidates({

@@ -1,12 +1,12 @@
 import Flutter
 import UIKit
 
-@objc(ReaderFlutterViewController)
-final class ReaderFlutterViewController: FlutterViewController {
+@objc(ReaderFlutterViewController) class ReaderFlutterViewController: FlutterViewController {
   private var readerImmersiveEnabled = false {
     didSet {
-      guard oldValue != readerImmersiveEnabled else { return }
-      refreshImmersiveUI()
+      if oldValue != readerImmersiveEnabled {
+        refreshImmersiveUI()
+      }
     }
   }
 
@@ -23,11 +23,14 @@ final class ReaderFlutterViewController: FlutterViewController {
   }
 
   override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge {
-    []
+    readerImmersiveEnabled ? .all : []
   }
 
-  func setReaderImmersiveEnabled(_ enabled: Bool) {
+  @objc func setReaderImmersiveEnabled(_ enabled: Bool) {
     readerImmersiveEnabled = enabled
+    if enabled {
+      refreshImmersiveUI()
+    }
   }
 
   override func viewDidAppear(_ animated: Bool) {
@@ -52,130 +55,143 @@ final class ReaderFlutterViewController: FlutterViewController {
 }
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterPluginRegistrant {
   private var readerImmersiveEnabled = false
-  private var readerUIChannel: FlutterMethodChannel?
-  private var readerStatusChannel: FlutterMethodChannel?
+  private var storageBridge: StorageBridge?
+  private var incomingBookBridge: IncomingBookBridge?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    pluginRegistrant = self
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+  func register(with registry: FlutterPluginRegistry) {
+    GeneratedPluginRegistrant.register(with: registry)
 
-    guard let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "LocalReaderPlatformBridge"
-    ) else {
-      NSLog("Local reader platform bridge unavailable")
+    guard let messenger = registry.registrar(forPlugin: "ReaderUIBridge")?.messenger() else {
+      NSLog("Reader bridge init failed: binaryMessenger unavailable")
       return
     }
-    installReaderChannels(messenger: registrar.messenger())
+
+    let readerUIChannel = FlutterMethodChannel(
+      name: "com.niki.xxread/reader_ui",
+      binaryMessenger: messenger
+    )
+    readerUIChannel.setMethodCallHandler { [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) in
+      switch call.method {
+      case "setReaderImmersive":
+        guard let args = call.arguments as? [String: Any],
+              let enabled = args["enabled"] as? Bool else {
+          result(
+            FlutterError(
+              code: "invalid_args",
+              message: "expected {enabled: bool}",
+              details: nil
+            )
+          )
+          return
+        }
+        self?.readerImmersiveEnabled = enabled
+        self?.applyReaderImmersiveIfPossible()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let readerStatusChannel = FlutterMethodChannel(
+      name: "com.niki.xxread/reader_status",
+      binaryMessenger: messenger
+    )
+    readerStatusChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
+      switch call.method {
+      case "getBatteryStatus":
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let level = UIDevice.current.batteryLevel
+        guard level >= 0 else {
+          result(nil)
+          return
+        }
+        let state = UIDevice.current.batteryState
+        result([
+          "level": Int((level * 100).rounded()),
+          "charging": state == .charging || state == .full,
+        ])
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    storageBridge = StorageBridge(messenger: messenger)
+    incomingBookBridge = IncomingBookBridge(messenger: messenger)
+
   }
 
   override func applicationDidBecomeActive(_ application: UIApplication) {
     super.applicationDidBecomeActive(application)
     applyReaderImmersiveIfPossible()
+    IncomingBookInbox.shared.consumeSharedExtensionInboxIfConfigured()
   }
 
-  private func installReaderChannels(messenger: FlutterBinaryMessenger) {
-    let readerUIChannel = FlutterMethodChannel(
-      name: "org.example.xxread/reader_ui",
-      binaryMessenger: messenger
-    )
-    readerUIChannel.setMethodCallHandler { [weak self] call, result in
-      guard call.method == "setReaderImmersive" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      guard
-        let arguments = call.arguments as? [String: Any],
-        let enabled = arguments["enabled"] as? Bool
-      else {
-        result(
-          FlutterError(
-            code: "invalid_args",
-            message: "expected {enabled: bool}",
-            details: nil
-          )
-        )
-        return
-      }
-      self?.readerImmersiveEnabled = enabled
-      self?.applyReaderImmersiveIfPossible()
-      result(nil)
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    if !IncomingBookInbox.uniqueSupportedFileURLs([url]).isEmpty {
+      IncomingBookInbox.shared.accept(urls: [url], action: "open")
+      return true
     }
-    self.readerUIChannel = readerUIChannel
-
-    let readerStatusChannel = FlutterMethodChannel(
-      name: "org.example.xxread/reader_status",
-      binaryMessenger: messenger
-    )
-    readerStatusChannel.setMethodCallHandler { call, result in
-      guard call.method == "getBatteryStatus" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      UIDevice.current.isBatteryMonitoringEnabled = true
-      let level = UIDevice.current.batteryLevel
-      guard level >= 0 else {
-        result(nil)
-        return
-      }
-      let state = UIDevice.current.batteryState
-      result([
-        "level": Int((level * 100).rounded()),
-        "charging": state == .charging || state == .full,
-      ])
-    }
-    self.readerStatusChannel = readerStatusChannel
+    return super.application(app, open: url, options: options)
   }
 
   private func applyReaderImmersiveIfPossible() {
-    currentReaderController()?.setReaderImmersiveEnabled(readerImmersiveEnabled)
+    guard let controller = currentReaderController() else { return }
+    controller.setReaderImmersiveEnabled(readerImmersiveEnabled)
   }
 
   private func currentReaderController() -> ReaderFlutterViewController? {
-    for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
-      let window = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first
-      if let controller = findReaderController(in: window?.rootViewController) {
-        return controller
+    if #available(iOS 13.0, *) {
+      for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+        let keyWindow = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first
+        if let found = findReaderController(in: keyWindow?.rootViewController) {
+          return found
+        }
       }
+      return nil
     }
     return findReaderController(in: window?.rootViewController)
   }
 
-  private func findReaderController(
-    in viewController: UIViewController?
-  ) -> ReaderFlutterViewController? {
+  private func findReaderController(in viewController: UIViewController?) -> ReaderFlutterViewController? {
     guard let viewController else { return nil }
     if let reader = viewController as? ReaderFlutterViewController {
       return reader
     }
     if let presented = viewController.presentedViewController,
-       let reader = findReaderController(in: presented) {
-      return reader
+       let found = findReaderController(in: presented) {
+      return found
     }
-    if let navigation = viewController as? UINavigationController {
-      for child in navigation.viewControllers {
-        if let reader = findReaderController(in: child) {
-          return reader
+    if let nav = viewController as? UINavigationController {
+      for vc in nav.viewControllers {
+        if let found = findReaderController(in: vc) {
+          return found
         }
       }
     }
-    if let tabs = viewController as? UITabBarController {
-      for child in tabs.viewControllers ?? [] {
-        if let reader = findReaderController(in: child) {
-          return reader
+    if let tab = viewController as? UITabBarController {
+      for vc in tab.viewControllers ?? [] {
+        if let found = findReaderController(in: vc) {
+          return found
         }
       }
     }
     for child in viewController.children {
-      if let reader = findReaderController(in: child) {
-        return reader
+      if let found = findReaderController(in: child) {
+        return found
       }
     }
     return nil

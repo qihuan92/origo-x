@@ -12,8 +12,8 @@ import 'package:path_provider/path_provider.dart';
 class CoverGenerator {
   /// 生成 PNG 封面。
   ///
-  /// [format] 为兼容旧调用保留，但不再影响视觉结果；相同书名和作者会得到
-  /// 相同封面。
+  /// [format] 为兼容旧调用保留，但不再影响视觉结果。这样同一本书无论来自
+  /// 本地文件还是在线书源，只要书名和作者一致，就会得到相同封面。
   ///
   /// [fallbackTitle] 在 [title] 为空时作为兜底标题绘制，由 UI 调用方通过
   /// `context.l10n.bookUntitled` 传入；服务层调用方可不传（默认空串）。

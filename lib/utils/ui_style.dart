@@ -18,11 +18,11 @@ extension AppUiStyleX on AppUiStyle {
 
 AppUiStyle appUiStyleFromStorage(String? value) {
   switch (value) {
-    case 'material3':
-      return AppUiStyle.material3;
     case 'glass':
-    default:
       return AppUiStyle.glass;
+    case 'material3':
+    default:
+      return AppUiStyle.material3;
   }
 }
 

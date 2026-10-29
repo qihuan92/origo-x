@@ -8,6 +8,6 @@ Widget buildReaderThemeBackgroundImage(String imagePath) {
     fit: BoxFit.cover,
     filterQuality: FilterQuality.medium,
     gaplessPlayback: true,
-    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
   );
 }

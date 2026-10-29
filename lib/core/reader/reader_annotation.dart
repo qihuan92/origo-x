@@ -248,11 +248,10 @@ TextSpan buildReaderAnnotatedSpan({
 }
 
 TextStyle _spokenHighlightTextStyle(ReaderThemePalette palette) => TextStyle(
-  // Pagination uses the original typography. Highlighting must only paint:
-  // changing weight here can change glyph widths and reflow the current page.
   backgroundColor: palette.accent.withValues(
     alpha: palette.brightness == Brightness.dark ? 0.34 : 0.22,
   ),
+  fontWeight: FontWeight.w600,
 );
 
 TextSpan _mergeTextSpanStyle(

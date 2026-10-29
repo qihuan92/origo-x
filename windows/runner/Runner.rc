@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "org.example" "\0"
-            VALUE "FileDescription", "xxread" "\0"
+            VALUE "CompanyName", "Open Reading" "\0"
+            VALUE "FileDescription", "OpenReading" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "xxread" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 org.example. All rights reserved." "\0"
+            VALUE "InternalName", "OpenReading" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Open Reading contributors. AGPL-3.0." "\0"
             VALUE "OriginalFilename", "xxread.exe" "\0"
-            VALUE "ProductName", "xxread" "\0"
+            VALUE "ProductName", "OpenReading" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
@@ -106,6 +106,48 @@ BEGIN
 END
 
 #endif    // English (United States) resources
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Chinese (Simplified, China) resources
+//
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION VERSION_AS_NUMBER
+ PRODUCTVERSION VERSION_AS_NUMBER
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS__WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "CompanyName", "Open Reading" "\0"
+            VALUE "FileDescription", "开元阅读" "\0"
+            VALUE "FileVersion", VERSION_AS_STRING "\0"
+            VALUE "InternalName", "开元阅读" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Open Reading contributors. AGPL-3.0." "\0"
+            VALUE "OriginalFilename", "xxread.exe" "\0"
+            VALUE "ProductName", "开元阅读" "\0"
+            VALUE "ProductVersion", VERSION_AS_STRING "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END
+#endif    // Chinese (Simplified, China) resources
 /////////////////////////////////////////////////////////////////////////////
 
 

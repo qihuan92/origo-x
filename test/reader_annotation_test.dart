@@ -9,54 +9,6 @@ import 'package:xxread/models/book_note.dart';
 import 'package:xxread/utils/reader_themes.dart';
 
 void main() {
-  test('spoken highlight preserves body and nested EPUB typography', () {
-    for (final weight in [FontWeight.w300, FontWeight.w400, FontWeight.w700]) {
-      final style = TextStyle(
-        fontFamily: 'ReaderFont',
-        fontSize: 21,
-        fontWeight: weight,
-        height: 1.6,
-        letterSpacing: 0.4,
-      );
-      final span = buildReaderAnnotatedSpan(
-        sourceText: '正文强调',
-        start: 0,
-        end: 4,
-        baseStyle: style,
-        palette: ReaderThemes.day,
-        annotations: const [],
-        spokenHighlight: const ReaderAloudHighlight(
-          chapterIndex: 0,
-          chapterId: 'chapter-1',
-          startOffset: 0,
-          endOffset: 4,
-        ),
-        baseSpanBuilder: (_, _) => TextSpan(
-          text: '正文',
-          style: style,
-          children: const [
-            TextSpan(
-              text: '强调',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-      );
-      final body = span.children!.single as TextSpan;
-      final emphasis = body.children!.single as TextSpan;
-      expect(
-        body.style,
-        style.copyWith(backgroundColor: body.style!.backgroundColor),
-      );
-      expect(body.style!.backgroundColor, isNotNull);
-      expect(emphasis.style!.fontWeight, FontWeight.w800);
-      expect(emphasis.style!.fontStyle, FontStyle.italic);
-    }
-  });
-
   test('selection snapshots preserve quote context and canonical offsets', () {
     const source = '前文内容。需要高亮的句子。后文内容。';
     final start = source.indexOf('需要');

@@ -4,7 +4,6 @@ import '../core/reader/reader_leaf_status.dart';
 import '../core/reader/reader_safe_area.dart';
 import '../utils/reader_themes.dart';
 import 'reader_theme_background.dart';
-import 'reader_progress_footer.dart';
 import 'reader_top_information_bar.dart';
 
 enum ReaderPageNumberPlacement { bottomLeft, bottomRight }
@@ -74,7 +73,6 @@ class ReaderPaperPageLeaf extends StatelessWidget {
     required this.safeArea,
     required this.metadata,
     required this.child,
-    this.chapterProgressLabel = '',
     this.pageNumberPlacement = ReaderPageNumberPlacement.bottomRight,
     this.horizontalPadding = 14,
     this.pageNumberHorizontalPadding = 24,
@@ -90,7 +88,6 @@ class ReaderPaperPageLeaf extends StatelessWidget {
   final ReaderSafeAreaMetrics safeArea;
   final ReaderPaperPageMetadata metadata;
   final Widget child;
-  final String chapterProgressLabel;
   final ReaderPageNumberPlacement pageNumberPlacement;
   final double horizontalPadding;
   final double pageNumberHorizontalPadding;
@@ -169,17 +166,20 @@ class ReaderPaperPageLeaf extends StatelessWidget {
                 right: pageNumberHorizontalPadding,
                 bottom: safeArea.pageNumberBottom,
                 height: ReaderSafeAreaMetrics.pageNumberReserve,
-                child: ReaderProgressFooter(
+                child: Align(
                   key: ValueKey('reader-leaf-footer:${metadata.pageIdentity}'),
-                  chapterLabel: chapterProgressLabel,
-                  pageLabel: metadata.pageLabel,
-                  pageKey: ValueKey(
-                    'reader-leaf-page:${metadata.pageIdentity}',
-                  ),
-                  pageOnLeft:
+                  alignment:
                       pageNumberPlacement ==
-                      ReaderPageNumberPlacement.bottomLeft,
-                  style: footerStyle,
+                          ReaderPageNumberPlacement.bottomLeft
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
+                  child: Text(
+                    metadata.pageLabel,
+                    key: ValueKey('reader-leaf-page:${metadata.pageIdentity}'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: footerStyle,
+                  ),
                 ),
               ),
           ],

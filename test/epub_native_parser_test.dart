@@ -118,17 +118,14 @@ void main() {
     expect(heading['bold'], isTrue);
     expect(italic['italic'], isTrue);
     expect(bold['bold'], isTrue);
-    final embeddedFamily = special['fontFamily'] as String;
-    expect(embeddedFamily, startsWith('epub_fixture_'));
+    expect(special['fontFamily'], 'epub_fixture_fixture_face');
 
     final fonts = Map<String, dynamic>.from(parsed['fonts'] as Map);
-    expect(fonts.keys, contains(embeddedFamily));
-    expect(File(fonts[embeddedFamily] as String).readAsBytesSync(), <int>[
-      0,
-      1,
-      2,
-      3,
-    ]);
+    expect(fonts.keys, contains('epub_fixture_fixture_face'));
+    expect(
+      File(fonts['epub_fixture_fixture_face'] as String).readAsBytesSync(),
+      <int>[0, 1, 2, 3],
+    );
 
     final firstImage = firstBlocks.firstWhere(
       (block) => block['type'] == 'image',
@@ -164,136 +161,6 @@ void main() {
       File(invalidUtf8Image['imagePath'] as String).readAsBytesSync(),
       <int>[10, 11, 12],
     );
-  });
-
-  test('uses an available embedded font after missing CSS fallbacks', () {
-    epubFile.writeAsBytesSync(
-      _epubFixture(
-        stylesheet: '''
-@font-face { font-family: "Fixture Face"; src: url("../fonts/missing.ttf"), url("../fonts/fixture.ttf"); }
-body { font-family: "Missing Face", "Fixture Face", serif; }
-.special { font-family: "Missing Face", serif; }
-''',
-      ),
-    );
-    final index = buildEpubNativeIndex(<String, dynamic>{
-      'epubPath': epubFile.path,
-      'cacheDirectory': cacheDirectory.path,
-      'familyPrefix': 'fixture',
-    });
-    final parsed = loadEpubNativeChapters(<String, dynamic>{
-      'epubPath': epubFile.path,
-      'cacheDirectory': cacheDirectory.path,
-      'familyPrefix': 'fixture',
-      'cssPaths': index['cssPaths'],
-      'chapters': index['chapters'],
-    });
-    final blocks =
-        ((parsed['chapters'] as List).first as Map)['blocks'] as List;
-    final heading = blocks.cast<Map>().firstWhere(
-      (block) => block['content'] == 'Major Heading',
-      orElse: () => fail('heading missing: $blocks'),
-    );
-    final special = blocks.cast<Map>().firstWhere(
-      (block) => (block['content'] as String?)?.trim() == 'special',
-    );
-    final embeddedFamily = heading['fontFamily'] as String;
-    expect(embeddedFamily, startsWith('epub_fixture_'));
-    expect(special['fontFamily'], 'serif');
-    final fonts = Map<String, dynamic>.from(parsed['fonts'] as Map);
-    expect(fonts.keys, <String>[embeddedFamily]);
-    expect(File(fonts.values.single as String).readAsBytesSync(), <int>[
-      0,
-      1,
-      2,
-      3,
-    ]);
-  });
-
-  test('does not claim an embedded font whose file is absent', () {
-    epubFile.writeAsBytesSync(
-      _epubFixture(
-        stylesheet: '''
-@font-face { font-family: "Missing Face"; src: url("../fonts/missing.ttf"); }
-body { font-family: "Missing Face", sans-serif; }
-''',
-      ),
-    );
-    final index = buildEpubNativeIndex(<String, dynamic>{
-      'epubPath': epubFile.path,
-      'cacheDirectory': cacheDirectory.path,
-      'familyPrefix': 'fixture',
-    });
-    final parsed = loadEpubNativeChapters(<String, dynamic>{
-      'epubPath': epubFile.path,
-      'cacheDirectory': cacheDirectory.path,
-      'familyPrefix': 'fixture',
-      'cssPaths': index['cssPaths'],
-      'chapters': index['chapters'],
-    });
-    final blocks =
-        ((parsed['chapters'] as List).first as Map)['blocks'] as List;
-    final heading = blocks.cast<Map>().firstWhere(
-      (block) => block['content'] == 'Major Heading',
-    );
-    expect(heading['fontFamily'], 'sans-serif');
-    expect(parsed['fonts'], isEmpty);
-  });
-
-  test('keeps distinct embedded fonts with Chinese family names', () {
-    epubFile.writeAsBytesSync(
-      _epubFixture(
-        stylesheet: '''
-@font-face { font-family: "宋体"; src: url("../fonts/song.ttf"); }
-@font-face { font-family: "黑体"; src: url("../fonts/hei.ttf"); }
-h2 { font-family: "宋体"; }
-p { font-family: "黑体"; }
-''',
-        additionalFonts: const {
-          'song.ttf': [11, 12, 13],
-          'hei.ttf': [21, 22, 23],
-        },
-      ),
-    );
-    final index = buildEpubNativeIndex(<String, dynamic>{
-      'epubPath': epubFile.path,
-      'cacheDirectory': cacheDirectory.path,
-      'familyPrefix': 'fixture',
-    });
-    final arguments = <String, dynamic>{
-      'epubPath': epubFile.path,
-      'cacheDirectory': cacheDirectory.path,
-      'familyPrefix': 'fixture',
-      'cssPaths': index['cssPaths'],
-      'chapters': index['chapters'],
-    };
-    final parsed = loadEpubNativeChapters(arguments);
-    final blocks =
-        ((parsed['chapters'] as List).first as Map)['blocks'] as List;
-    final heading = blocks.cast<Map>().firstWhere(
-      (block) => block['content'] == 'Major Heading',
-      orElse: () => fail('heading missing: $blocks'),
-    );
-    final paragraph = blocks.cast<Map>().firstWhere(
-      (block) => (block['content'] as String?)?.contains('Alpha') ?? false,
-    );
-    final headingFamily = heading['fontFamily'] as String;
-    final paragraphFamily = paragraph['fontFamily'] as String;
-    final fonts = Map<String, dynamic>.from(parsed['fonts'] as Map);
-
-    expect(headingFamily, isNot(paragraphFamily));
-    expect(fonts.keys, containsAll(<String>[headingFamily, paragraphFamily]));
-    expect(File(fonts[headingFamily] as String).readAsBytesSync(), [
-      11,
-      12,
-      13,
-    ]);
-    expect(File(fonts[paragraphFamily] as String).readAsBytesSync(), [
-      21,
-      22,
-      23,
-    ]);
-    expect(loadEpubNativeChapters(arguments)['fonts'], parsed['fonts']);
   });
 
   test('reopens parsed chapters from cache without reading the EPUB again', () {
@@ -427,7 +294,6 @@ p { font-family: "黑体"; }
         'title': 'Nested chapter',
         'depth': 1,
         'chapterIndex': 1,
-        'fragment': 'start',
       },
     ]);
 
@@ -440,13 +306,7 @@ p { font-family: "黑体"; }
     });
     final chapters = (parsed['chapters'] as List).cast<Map>();
     expect(chapters[0]['plainText'], 'UTF-16 内容完整。');
-    expect(chapters[1]['plainText'], '引言。\n\nGBK 章节不应丢字。');
-    final startOffset = (chapters[1]['anchors'] as Map)['start'] as int;
-    expect(startOffset, greaterThan(0));
-    expect(
-      (chapters[1]['plainText'] as String).substring(startOffset),
-      'GBK 章节不应丢字。',
-    );
+    expect(chapters[1]['plainText'], 'GBK 章节不应丢字。');
   });
 }
 
@@ -502,16 +362,13 @@ List<int> _epub3FixtureWithoutSpine() {
     'EPUB/text/two.xhtml',
     gbk_bytes.encode(
       '<html><head><meta charset="gbk"></head>'
-      '<body><p>引言。</p><p id="start">GBK 章节不应丢字。</p></body></html>',
+      '<body><p>GBK 章节不应丢字。</p></body></html>',
     ),
   );
   return ZipEncoder().encode(archive)!;
 }
 
-List<int> _epubFixture({
-  String? stylesheet,
-  Map<String, List<int>> additionalFonts = const {},
-}) {
+List<int> _epubFixture() {
   final archive = Archive();
   void addText(String name, String content) {
     final bytes = utf8.encode(content);
@@ -559,17 +416,13 @@ List<int> _epubFixture({
     <navPoint id="n2"><navLabel><text>Styled chapter</text></navLabel><content src="text/chapter-1.xhtml"/></navPoint>
   </navPoint></navMap>
 </ncx>''');
-  addText(
-    'OEBPS/styles/book.css',
-    stylesheet ??
-        '''
+  addText('OEBPS/styles/book.css', '''
 @font-face { font-family: "Fixture Face"; src: url("../fonts/fixture.ttf"); }
 body { font-family: serif; }
 .special { font-family: "Fixture Face"; }
 em { font-style: italic; }
 strong { font-weight: 700; }
-''',
-  );
+''');
   addText(
     'OEBPS/text/chapter-1.xhtml',
     '''<?xml version="1.0" encoding="UTF-8"?>
@@ -590,9 +443,6 @@ strong { font-weight: 700; }
 </body></html>''',
   );
   addBytes('OEBPS/fonts/fixture.ttf', <int>[0, 1, 2, 3]);
-  for (final entry in additionalFonts.entries) {
-    addBytes('OEBPS/fonts/${entry.key}', entry.value);
-  }
   addBytes('OEBPS/images/shared.png', <int>[1, 2, 3]);
   addBytes('OEBPS/other/shared.png', <int>[4, 5, 6]);
   addBytes('OEBPS/images/100%real.png', <int>[7, 8, 9]);

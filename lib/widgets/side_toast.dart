@@ -20,8 +20,6 @@ void showSideToast(
   Duration? duration,
   IconData? icon,
   SideToastKind kind = SideToastKind.info,
-  String? actionLabel,
-  VoidCallback? onAction,
 }) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
@@ -40,8 +38,6 @@ void showSideToast(
           : duration,
       icon: icon,
       kind: kind,
-      actionLabel: actionLabel,
-      onAction: onAction,
       onDismissed: () {
         if (identical(_activeSideToastEntry, entry)) {
           _activeSideToastEntry = null;
@@ -68,8 +64,6 @@ class _SideToast extends StatefulWidget {
   final Duration duration;
   final IconData? icon;
   final SideToastKind kind;
-  final String? actionLabel;
-  final VoidCallback? onAction;
   final VoidCallback onDismissed;
 
   const _SideToast({
@@ -79,8 +73,6 @@ class _SideToast extends StatefulWidget {
     required this.duration,
     required this.icon,
     required this.kind,
-    required this.actionLabel,
-    required this.onAction,
     required this.onDismissed,
   });
 
@@ -90,7 +82,6 @@ class _SideToast extends StatefulWidget {
 
 class _SideToastState extends State<_SideToast>
     with SingleTickerProviderStateMixin {
-  final Key _dismissibleKey = UniqueKey();
   late final AnimationController _controller;
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _fadeAnimation;
@@ -107,7 +98,7 @@ class _SideToastState extends State<_SideToast>
       reverseDuration: const Duration(milliseconds: 140),
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(1.15, 0),
+      begin: const Offset(0, -0.22),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _fadeAnimation = CurvedAnimation(
@@ -142,18 +133,6 @@ class _SideToastState extends State<_SideToast>
       await _controller.reverse();
     }
     widget.onDismissed();
-  }
-
-  void _dismissAfterSwipe() {
-    if (_dismissed) return;
-    _dismissed = true;
-    _autoDismissTimer?.cancel();
-    widget.onDismissed();
-  }
-
-  void _runAction() {
-    widget.onAction?.call();
-    _dismissWithAnimation();
   }
 
   @override
@@ -242,56 +221,52 @@ class _SideToastState extends State<_SideToast>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (widget.actionLabel != null && widget.onAction != null) ...[
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: _runAction,
-                style: TextButton.styleFrom(
-                  foregroundColor: accent,
-                  minimumSize: const Size(0, 36),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(widget.actionLabel!),
-              ),
-            ],
           ],
         ),
       ),
     );
 
-    return Positioned(
-      top: mediaQuery.padding.top + (compact ? 8 : 16),
-      left: compact ? 12 : null,
-      right: compact ? 12 : 24,
-      child: Semantics(
-        container: true,
-        liveRegion: true,
-        label: widget.message,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: compact ? mediaQuery.size.width - 24 : 420,
-              ),
-              child: Dismissible(
-                key: _dismissibleKey,
-                direction: DismissDirection.horizontal,
-                resizeDuration: null,
-                onDismissed: (_) => _dismissAfterSwipe(),
-                child: Material(
-                  color: Colors.transparent,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: useBlur
-                        ? BackdropFilter(
-                            enabled: useBlur,
-                            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                            child: toastCard,
-                          )
-                        : toastCard,
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: SafeArea(
+          minimum: EdgeInsets.fromLTRB(
+            compact ? 12 : 24,
+            compact ? 8 : 16,
+            compact ? 12 : 24,
+            0,
+          ),
+          child: Align(
+            alignment: compact ? Alignment.topCenter : Alignment.topRight,
+            child: Semantics(
+              container: true,
+              liveRegion: true,
+              label: widget.message,
+              child: ExcludeSemantics(
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: compact ? mediaQuery.size.width - 24 : 420,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: useBlur
+                              ? BackdropFilter(
+                                  enabled: useBlur,
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 12,
+                                    sigmaY: 12,
+                                  ),
+                                  child: toastCard,
+                                )
+                              : toastCard,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

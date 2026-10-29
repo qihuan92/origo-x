@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 @immutable
 class ReaderMarginSettings {
   static const double min = 0;
-  static const double max = 80;
+  static const double max = 40;
   static const double horizontalMin = 0;
-  static const double horizontalMax = 72;
+  static const double horizontalMax = 48;
   static const double defaultTop = 4;
   static const double defaultBottom = 0;
   static const double legacyDefault = 28;

@@ -6,6 +6,11 @@ import 'reader_text_characters.dart';
 typedef ReaderSourceSpanBuilder =
     InlineSpan Function(int sourceStart, int sourceEnd);
 
+// SkParagraph discards leading whitespace when a justified paragraph wraps.
+// HANGUL FILLER is visually blank and full-width, but Unicode classifies it as
+// a letter, so Android and desktop paragraph engines cannot trim it as space.
+const _readerIndentCharacter = '\u3164';
+
 /// A display-only typography projection of canonical reader text.
 ///
 /// First-line indentation and paragraph spacing add or replace visual code
@@ -15,19 +20,20 @@ typedef ReaderSourceSpanBuilder =
 /// only the projection shared by its measurement span and the rendered span.
 ///
 /// When `normalizeParagraphBreaks` is enabled, runs of two or more source line
-/// breaks, including whitespace-only blank rows, are treated as paragraph
-/// separators and projected to exactly one structural line break plus the
-/// configured additional spacing. This lets flowing-text readers remove
-/// source-owned blank rows without changing canonical source offsets.
+/// breaks are treated as paragraph separators and projected to exactly one
+/// structural line break plus the configured additional spacing. This lets
+/// EPUB rendering remove parser-generated blank rows without changing canonical
+/// source offsets.
 @immutable
 class ReaderTextLayout {
   const ReaderTextLayout._({
     required this.sourceText,
     required this.sourceOffset,
     required this.text,
-    required this._runs,
-    required this._sourceBoundaries,
-  });
+    required List<_ReaderTextRun> runs,
+    required List<int> sourceBoundaries,
+  }) : _runs = runs,
+       _sourceBoundaries = sourceBoundaries;
 
   factory ReaderTextLayout.build(
     String sourceText, {
@@ -69,7 +75,6 @@ class ReaderTextLayout {
       String value, {
       required int replacedSourceStart,
       required int replacedSourceEnd,
-      bool isIndent = false,
     }) {
       if (value.isEmpty) return;
       output.write(value);
@@ -78,7 +83,6 @@ class ReaderTextLayout {
           displayStart: displayOffset,
           displayEnd: displayOffset + value.length,
           text: value,
-          isIndent: isIndent,
         ),
       );
       final globalStart = sourceOffset + replacedSourceStart;
@@ -103,10 +107,9 @@ class ReaderTextLayout {
         if (sourceCursor < sourceText.length &&
             !isReaderLineBreakCodeUnit(sourceText.codeUnitAt(sourceCursor))) {
           appendGenerated(
-            List.filled(indent, '\u00a0').join(),
+            List.filled(indent, _readerIndentCharacter).join(),
             replacedSourceStart: existingIndentStart,
             replacedSourceEnd: sourceCursor,
-            isIndent: true,
           );
           atParagraphStart = false;
         }
@@ -122,23 +125,11 @@ class ReaderTextLayout {
 
       final breakStart = sourceCursor;
       var logicalBreakCount = 0;
-      var breakCursor = sourceCursor;
-      while (breakCursor < sourceText.length) {
-        final breakLength = readerLineBreakLengthAt(sourceText, breakCursor);
-        if (breakLength == 0) break;
-        breakCursor += breakLength;
+      while (sourceCursor < sourceText.length &&
+          isReaderLineBreakCodeUnit(sourceText.codeUnitAt(sourceCursor))) {
+        sourceCursor += readerLineBreakLengthAt(sourceText, sourceCursor);
         logicalBreakCount++;
-
-        if (!normalizeParagraphBreaks) continue;
-        var nextBreak = breakCursor;
-        while (nextBreak < sourceText.length &&
-            isReaderIndentCodeUnit(sourceText.codeUnitAt(nextBreak))) {
-          nextBreak++;
-        }
-        if (readerLineBreakLengthAt(sourceText, nextBreak) == 0) break;
-        breakCursor = nextBreak;
       }
-      sourceCursor = breakCursor;
       if (normalizeParagraphBreaks && logicalBreakCount > 1) {
         // A paragraph separator at the beginning of a projection commonly
         // follows an inline EPUB image. The image/text gap already separates
@@ -249,18 +240,7 @@ class ReaderTextLayout {
         children.add(
           TextSpan(
             text: run.generatedText!.substring(localStart, localEnd),
-            // Breakable spaces lose their advance during justification. Our
-            // NBSP-only font reserves exactly one em per indent without font
-            // fallback or placeholders that would split selectable text.
-            style: run.isIndent
-                ? generatedStyle.copyWith(
-                    fontFamily: 'ReaderIndent',
-                    fontFamilyFallback: const [],
-                    height: kTextHeightNone,
-                    letterSpacing: 0,
-                    wordSpacing: 0,
-                  )
-                : generatedStyle,
+            style: generatedStyle,
           ),
         );
       } else {
@@ -284,7 +264,6 @@ class _ReaderTextRun {
     this.sourceStart,
     this.sourceEnd,
     this.generatedText,
-    this.isIndent = false,
   });
 
   const _ReaderTextRun.source({
@@ -303,12 +282,10 @@ class _ReaderTextRun {
     required int displayStart,
     required int displayEnd,
     required String text,
-    bool isIndent = false,
   }) : this._(
          displayStart: displayStart,
          displayEnd: displayEnd,
          generatedText: text,
-         isIndent: isIndent,
        );
 
   final int displayStart;
@@ -316,7 +293,6 @@ class _ReaderTextRun {
   final int? sourceStart;
   final int? sourceEnd;
   final String? generatedText;
-  final bool isIndent;
 
   bool get isGenerated => generatedText != null;
 }

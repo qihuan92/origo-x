@@ -5,20 +5,21 @@ import 'package:xxread/models/book.dart';
 import 'package:xxread/services/books/book_import_models.dart';
 
 void main() {
-  test('本地书籍元数据可以完整地写入并恢复', () {
+  test('书籍来源身份可以完整地写入并恢复', () {
     final book = Book(
       title: '示例书籍',
       filePath: '/managed/example.epub',
       format: 'EPUB',
-      contentHash: 'local-content-hash',
-      textEncoding: 'utf-8',
+      sourceKind: 'android_tree',
+      sourceLocator: 'content://tree/root/document/book-1',
+      sourceModifiedTime: 1721184000000,
     );
 
     final restored = Book.fromMap(book.toMap());
 
-    expect(restored.filePath, '/managed/example.epub');
-    expect(restored.contentHash, 'local-content-hash');
-    expect(restored.textEncoding, 'utf-8');
+    expect(restored.sourceKind, 'android_tree');
+    expect(restored.sourceLocator, 'content://tree/root/document/book-1');
+    expect(restored.sourceModifiedTime, 1721184000000);
   });
 
   test('withBytes 防御性复制并暴露不可变字节', () {

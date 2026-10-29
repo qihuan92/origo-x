@@ -14,9 +14,6 @@ class CustomFontRecord {
     required this.sha256,
     required this.fileSize,
     required this.importedAt,
-    this.variableWeightMin,
-    this.variableWeightMax,
-    this.weightAxisInspected = false,
     this.available = true,
   });
 
@@ -29,18 +26,9 @@ class CustomFontRecord {
   final String sha256;
   final int fileSize;
   final DateTime importedAt;
-  final int? variableWeightMin;
-  final int? variableWeightMax;
-  final bool weightAxisInspected;
   final bool available;
 
-  CustomFontRecord copyWith({
-    String? displayName,
-    int? variableWeightMin,
-    int? variableWeightMax,
-    bool? weightAxisInspected,
-    bool? available,
-  }) {
+  CustomFontRecord copyWith({String? displayName, bool? available}) {
     return CustomFontRecord(
       id: id,
       displayName: displayName ?? this.displayName,
@@ -51,9 +39,6 @@ class CustomFontRecord {
       sha256: sha256,
       fileSize: fileSize,
       importedAt: importedAt,
-      variableWeightMin: variableWeightMin ?? this.variableWeightMin,
-      variableWeightMax: variableWeightMax ?? this.variableWeightMax,
-      weightAxisInspected: weightAxisInspected ?? this.weightAxisInspected,
       available: available ?? this.available,
     );
   }
@@ -68,9 +53,6 @@ class CustomFontRecord {
     'sha256': sha256,
     'fileSize': fileSize,
     'importedAt': importedAt.toIso8601String(),
-    if (variableWeightMin != null) 'variableWeightMin': variableWeightMin,
-    if (variableWeightMax != null) 'variableWeightMax': variableWeightMax,
-    'weightAxisInspected': weightAxisInspected,
   };
 
   factory CustomFontRecord.fromJson(Map<String, Object?> json) {
@@ -84,9 +66,6 @@ class CustomFontRecord {
       sha256: json['sha256']! as String,
       fileSize: json['fileSize']! as int,
       importedAt: DateTime.parse(json['importedAt']! as String),
-      variableWeightMin: json['variableWeightMin'] as int?,
-      variableWeightMax: json['variableWeightMax'] as int?,
-      weightAxisInspected: json['weightAxisInspected'] as bool? ?? false,
     );
   }
 }
