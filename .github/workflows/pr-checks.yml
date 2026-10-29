@@ -66,23 +66,10 @@ jobs:
           retention-days: 7
 
   build-smoke:
-    name: Build smoke / ${{ matrix.name }}
+    name: Android debug APK
     needs: flutter-validation
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    continue-on-error: ${{ matrix.advisory }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Android debug APK
-            command: flutter build apk --debug
-            advisory: false
-          - name: Web release
-            command: flutter build web --release
-            # Web currently exposes third-party and 64-bit integer JavaScript
-            # compatibility gaps. Keep the signal visible without blocking PRs.
-            advisory: true
 
     steps:
       - name: Check out repository
@@ -101,8 +88,8 @@ jobs:
       - name: Generate localizations
         run: flutter gen-l10n
 
-      - name: Build ${{ matrix.name }}
-        run: ${{ matrix.command }}
+      - name: Build Android debug APK
+        run: flutter build apk --debug
 
   dependency-review:
     name: Dependency review
