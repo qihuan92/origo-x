@@ -84,6 +84,13 @@ class LegadoSourceImportService {
         'Source JSON must be valid UTF-8: ${error.message}',
       );
     }
+    final trimmed = text.trimLeft();
+    if (trimmed.startsWith('<')) {
+      throw const FormatException(
+        'This address returned a web page, not book-source JSON. '
+        'Use the collection import link instead of the page address.',
+      );
+    }
     return parseLegadoSources(
       text,
       maxSources: maxSources,

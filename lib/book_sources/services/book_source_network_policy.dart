@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import '../protocol/book_source_protocol.dart';
@@ -54,7 +55,13 @@ class BookSourceNetworkPolicy {
           ? uri
           : Uri(scheme: 'http', host: targetHost, port: targetPort);
       final addresses = await resolve(targetUri);
-      return Socket.startConnect(addresses.first, targetPort);
+      final task = await Socket.startConnect(addresses.first, targetPort);
+      // HttpClient uses a direct connectionFactory socket as-is. A raw TCP
+      // socket on port 443 sends cleartext HTTP, which shows up as a 400,
+      // a redirect loop, or a receive timeout. Proxy tunnels stay raw so
+      // HttpClient can complete CONNECT and start TLS itself.
+      if (proxyHost != null || uri.scheme != 'https') return task;
+      return _secureDirectConnection(task, uri.host);
     };
     return client;
   }
@@ -118,6 +125,78 @@ class BookSourceNetworkPolicy {
             first == 198 &&
             (second == 18 || second == 19)) ||
         first >= 224;
+  }
+
+  static ConnectionTask<Socket> _secureDirectConnection(
+    ConnectionTask<Socket> raw,
+    String host,
+  ) {
+    var cancelled = false;
+    final done = Completer<Socket>();
+
+    void finishCancelled() {
+      if (done.isCompleted) return;
+      done.completeError(const SocketException('Connection attempt cancelled'));
+    }
+
+    raw.socket
+        .then(
+          (socket) {
+            if (cancelled) {
+              socket.destroy();
+              finishCancelled();
+              return;
+            }
+            late final Future<SecureSocket> handshake;
+            try {
+              handshake = SecureSocket.secure(socket, host: host);
+            } catch (error, stack) {
+              socket.destroy();
+              if (!done.isCompleted) done.completeError(error, stack);
+              return;
+            }
+            handshake
+                .then(
+                  (secure) {
+                    if (cancelled) {
+                      secure.destroy();
+                      finishCancelled();
+                      return;
+                    }
+                    if (!done.isCompleted) done.complete(secure);
+                  },
+                  onError: (Object error, StackTrace stack) {
+                    socket.destroy();
+                    if (done.isCompleted) return;
+                    done.completeError(
+                      cancelled
+                          ? const SocketException(
+                              'Connection attempt cancelled',
+                            )
+                          : error,
+                      stack,
+                    );
+                  },
+                )
+                .ignore();
+          },
+          onError: (Object error, StackTrace stack) {
+            if (done.isCompleted) return;
+            done.completeError(
+              cancelled
+                  ? const SocketException('Connection attempt cancelled')
+                  : error,
+              stack,
+            );
+          },
+        )
+        .ignore();
+
+    return ConnectionTask.fromSocket<Socket>(done.future, () {
+      cancelled = true;
+      raw.cancel();
+      finishCancelled();
+    });
   }
 
   static Uri redirectTarget(Uri current, String? location) {

@@ -49,6 +49,23 @@ void main() {
     expect(result.additionalPreview?.sources, hasLength(1));
   });
 
+  test('reports an html download as a web page', () {
+    final service = LegadoSourceImportService();
+    addTearDown(service.close);
+    expect(
+      () => service.parseBytes(
+        Uint8List.fromList(utf8.encode('<!DOCTYPE html><html></html>')),
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('web page'),
+        ),
+      ),
+    );
+  });
+
   test('accepts realistic aggregate files larger than the old 4 MiB limit', () {
     expect(LegadoSourceImportService.maxImportBytes, 64 * 1024 * 1024);
     expect(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -75,6 +76,118 @@ void main() {
       }
     },
   );
+
+  test('direct http still uses the pinned socket', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) {
+      request.response.statusCode = HttpStatus.ok;
+      request.response.write('ok');
+      request.response.close();
+    });
+    final client = const BookSourceNetworkPolicy(
+      allowPrivateNetwork: true,
+    ).createPinnedHttpClient();
+    try {
+      final request = await client.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/health'),
+      );
+      final response = await request.close();
+      expect(response.statusCode, HttpStatus.ok);
+      expect(await response.transform(utf8.decoder).join(), 'ok');
+    } finally {
+      client.close(force: true);
+      await server.close(force: true);
+    }
+  });
+
+  test('direct https starts tls instead of sending cleartext', () async {
+    final temp = await Directory.systemTemp.createTemp('book-source-tls');
+    addTearDown(() => temp.delete(recursive: true));
+    final key = File('${temp.path}/key.pem');
+    final cert = File('${temp.path}/cert.pem');
+    final generated = await Process.run('openssl', [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-keyout',
+      key.path,
+      '-out',
+      cert.path,
+      '-days',
+      '1',
+      '-nodes',
+      '-subj',
+      '/CN=127.0.0.1',
+    ]);
+    expect(generated.exitCode, 0, reason: '${generated.stderr}');
+    final context = SecurityContext()
+      ..useCertificateChain(cert.path)
+      ..usePrivateKey(key.path);
+    final server = await HttpServer.bindSecure(
+      InternetAddress.loopbackIPv4,
+      0,
+      context,
+    );
+    server.listen((request) {
+      request.response.statusCode = HttpStatus.ok;
+      request.response.close();
+    });
+    final client = const BookSourceNetworkPolicy(
+      allowPrivateNetwork: true,
+    ).createPinnedHttpClient();
+    try {
+      final pending = client.getUrl(
+        Uri.parse('https://127.0.0.1:${server.port}/'),
+      );
+      await expectLater(pending, throwsA(isA<HandshakeException>()));
+    } finally {
+      client.close(force: true);
+      await server.close(force: true);
+    }
+  });
+
+  test('cancelling an https handshake does not escape', () async {
+    final temp = await Directory.systemTemp.createTemp('book-source-tls');
+    addTearDown(() => temp.delete(recursive: true));
+    final key = File('${temp.path}/key.pem');
+    final cert = File('${temp.path}/cert.pem');
+    final generated = await Process.run('openssl', [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-keyout',
+      key.path,
+      '-out',
+      cert.path,
+      '-days',
+      '1',
+      '-nodes',
+      '-subj',
+      '/CN=127.0.0.1',
+    ]);
+    expect(generated.exitCode, 0, reason: '${generated.stderr}');
+    final context = SecurityContext()
+      ..useCertificateChain(cert.path)
+      ..usePrivateKey(key.path);
+    final server = await HttpServer.bindSecure(
+      InternetAddress.loopbackIPv4,
+      0,
+      context,
+    );
+    server.listen((request) => request.response.close());
+    final client = const BookSourceNetworkPolicy(
+      allowPrivateNetwork: true,
+    ).createPinnedHttpClient();
+    final pending = client.getUrl(
+      Uri.parse('https://127.0.0.1:${server.port}/'),
+    );
+    client.close(force: true);
+    await expectLater(pending, throwsA(anything));
+    await server.close(force: true);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  });
 
   test('rejects unsafe redirects and HTTPS downgrades', () {
     expect(
