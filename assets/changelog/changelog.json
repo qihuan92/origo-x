@@ -2,6 +2,31 @@
     "schemaVersion": 1,
     "entries": [
         {
+            "version": "2.7.4",
+            "notes": {
+                "en": [
+                    "Direct HTTPS book-source connections now complete the TLS handshake. The previous pinned client sent cleartext HTTP to port 443, so imports failed with HTTP 400, redirect loops, or timeouts",
+                    "Pasting a book-source website page now reports that the address is HTML and asks for the collection import link",
+                    "This release publishes signed Android APKs only. The signature matches v2.7.3, so that build can be upgraded in place"
+                ],
+                "zh": [
+                    "直连 HTTPS 书源时会完成 TLS 握手。此前固定 IP 的连接把明文 HTTP 发到 443 端口，导入会报 400、重定向过多或超时",
+                    "粘贴书源网站的网页地址时，导入会说明这不是书源 JSON，需要改用合集的导入链接",
+                    "本次发布只提供正式签名的 Android APK，签名与 v2.7.3 相同，可以直接覆盖安装"
+                ],
+                "zh-TW": [
+                    "直連 HTTPS 書源時會完成 TLS 握手。此前固定 IP 的連線把明文 HTTP 發到 443 埠，匯入會出現 400、重新導向過多或逾時",
+                    "貼上書源網站的網頁地址時，匯入會說明這不是書源 JSON，需要改用合集的匯入連結",
+                    "本次發布只提供正式簽名的 Android APK，簽名與 v2.7.3 相同，可以直接覆蓋安裝"
+                ],
+                "ja": [
+                    "直接の HTTPS 書源接続で TLS ハンドシェイクを完了するようにしました。以前の固定 IP 接続は 443 番ポートへ平文 HTTP を送っていたため、インポートが HTTP 400、リダイレクトの繰り返し、またはタイムアウトになっていました",
+                    "書源サイトのページアドレスを貼り付けた場合は、それが書源 JSON ではないことを示し、コレクションのインポートリンクを使うよう案内します",
+                    "このリリースで公開するのは署名済み Android APK のみです。署名は v2.7.3 と同じなので、そのビルドから上書きインストールできます"
+                ]
+            }
+        },
+        {
             "version": "2.7.3",
             "notes": {
                 "en": [
