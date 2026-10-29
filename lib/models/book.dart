@@ -7,9 +7,7 @@ class Book {
   final int? id;
   final String title;
   final String author;
-  // 运行时可直接访问的文件路径（或平台 URI）。受管路径由存储边界
-  // 在数据库相对路径和当前 Documents 绝对路径之间转换。
-  final String filePath;
+  final String filePath; // 存储书籍文件的路径，而不是内容
   final String format;
   final int currentPage;
   final int totalPages; // 添加总页数字段
@@ -21,7 +19,7 @@ class Book {
   final int? fileModifiedTime;
   final String? contentHash;
   final String? tableOfContents;
-  final String? coverImagePath; // 运行时封面路径；数据库中受管封面使用相对路径
+  final String? coverImagePath; // 书籍封面图片路径
   final String? textEncoding; // TXT编码（导入时自动检测的结果）
 
   // ---- CanonicalLocator 双轨定位字段 ----
@@ -45,6 +43,16 @@ class Book {
   /// 旧分页缓存和 rendered locator 失效。
   /// null 表示尚未计算或旧数据兼容。
   final String? layoutSignature;
+  final String storageType;
+  final String? sourceId;
+  final String? sourceBookId;
+  final String? sourceJson;
+  final String? sourceBookJson;
+  final String? sourceKind;
+  final String? sourceLocator;
+  final int? sourceModifiedTime;
+
+  bool get isOnline => storageType == 'online';
 
   /// 全书阅读进度。新数据使用统一的 0..1 值，旧数据继续兼容页码比值。
   double get progress {
@@ -74,6 +82,14 @@ class Book {
     this.lastCanonicalLocator,
     this.lastRenderedLocator,
     this.layoutSignature,
+    this.storageType = 'local',
+    this.sourceId,
+    this.sourceBookId,
+    this.sourceJson,
+    this.sourceBookJson,
+    this.sourceKind,
+    this.sourceLocator,
+    this.sourceModifiedTime,
   }) : importDate = importDate ?? DateTime.now();
 
   // content 字段已被移除
@@ -99,6 +115,14 @@ class Book {
       'last_canonical_locator': lastCanonicalLocator,
       'last_rendered_locator': lastRenderedLocator,
       'layout_signature': layoutSignature,
+      'storage_type': storageType,
+      'source_id': sourceId,
+      'source_book_id': sourceBookId,
+      'source_json': sourceJson,
+      'source_book_json': sourceBookJson,
+      'source_kind': sourceKind,
+      'source_locator': sourceLocator,
+      'source_modified_time': sourceModifiedTime,
     };
   }
 
@@ -123,6 +147,14 @@ class Book {
       lastCanonicalLocator: map['last_canonical_locator'],
       lastRenderedLocator: map['last_rendered_locator'],
       layoutSignature: map['layout_signature'],
+      storageType: map['storage_type'] as String? ?? 'local',
+      sourceId: map['source_id'] as String?,
+      sourceBookId: map['source_book_id'] as String?,
+      sourceJson: map['source_json'] as String?,
+      sourceBookJson: map['source_book_json'] as String?,
+      sourceKind: map['source_kind'] as String?,
+      sourceLocator: map['source_locator'] as String?,
+      sourceModifiedTime: map['source_modified_time'] as int?,
     );
   }
 
@@ -146,6 +178,15 @@ class Book {
     String? lastCanonicalLocator,
     String? lastRenderedLocator,
     String? layoutSignature,
+    String? storageType,
+    String? sourceId,
+    String? sourceBookId,
+    String? sourceJson,
+    String? sourceBookJson,
+    String? sourceKind,
+    String? sourceLocator,
+    int? sourceModifiedTime,
+    bool clearSourceMetadata = false,
   }) {
     return Book(
       id: id ?? this.id,
@@ -167,6 +208,22 @@ class Book {
       lastCanonicalLocator: lastCanonicalLocator ?? this.lastCanonicalLocator,
       lastRenderedLocator: lastRenderedLocator ?? this.lastRenderedLocator,
       layoutSignature: layoutSignature ?? this.layoutSignature,
+      storageType: storageType ?? this.storageType,
+      sourceId: clearSourceMetadata ? null : sourceId ?? this.sourceId,
+      sourceBookId: clearSourceMetadata
+          ? null
+          : sourceBookId ?? this.sourceBookId,
+      sourceJson: clearSourceMetadata ? null : sourceJson ?? this.sourceJson,
+      sourceBookJson: clearSourceMetadata
+          ? null
+          : sourceBookJson ?? this.sourceBookJson,
+      sourceKind: clearSourceMetadata ? null : sourceKind ?? this.sourceKind,
+      sourceLocator: clearSourceMetadata
+          ? null
+          : sourceLocator ?? this.sourceLocator,
+      sourceModifiedTime: clearSourceMetadata
+          ? null
+          : sourceModifiedTime ?? this.sourceModifiedTime,
     );
   }
 

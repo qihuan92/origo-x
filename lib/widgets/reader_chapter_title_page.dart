@@ -1,8 +1,4 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-
-import '../core/reader/native_text_paginator.dart';
 
 /// The dedicated first page for a chapter whose title was split from its body.
 class ReaderChapterTitlePage extends StatelessWidget {
@@ -29,7 +25,6 @@ class ReaderChapterTitlePage extends StatelessWidget {
         child: Text(
           title,
           key: contentKey,
-          textScaler: readerBodyTextScaler,
           textAlign: TextAlign.center,
           style: bodyStyle.copyWith(
             fontSize: titleFontSizeFor(bodyStyle.fontSize ?? 19),
@@ -58,12 +53,7 @@ class ReaderInlineChapterTitle extends StatelessWidget {
   final TextStyle bodyStyle;
 
   static TextStyle titleStyleFor(TextStyle bodyStyle) => bodyStyle.copyWith(
-    // The upper bound tracks the body size so the heading never renders
-    // smaller than the text it introduces at large reader font sizes.
-    fontSize: ((bodyStyle.fontSize ?? 19) * 1.45).clamp(
-      24,
-      math.max(30, bodyStyle.fontSize ?? 19),
-    ),
+    fontSize: ((bodyStyle.fontSize ?? 19) * 1.45).clamp(24, 30),
     fontWeight: FontWeight.w600,
     height: 1.35,
   );
@@ -91,7 +81,6 @@ class ReaderInlineChapterTitle extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     title,
     key: contentKey,
-    textScaler: readerBodyTextScaler,
     maxLines: 3,
     overflow: TextOverflow.ellipsis,
     style: titleStyleFor(bodyStyle),

@@ -14,7 +14,7 @@ import 'package:html/dom.dart' as html_dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:path/path.dart' as path;
 
-const int epubNativeCacheVersion = 6;
+const int epubNativeCacheVersion = 3;
 
 Map<String, dynamic> extractEpubNativeMetadata(Map<String, dynamic> arguments) {
   final epubPath = arguments['epubPath'] as String;
@@ -358,7 +358,6 @@ Map<String, dynamic> buildEpubNativeIndex(Map<String, dynamic> arguments) {
             'title': entry.title,
             'depth': entry.depth,
             'chapterIndex': target,
-            if (entry.fragment != null) 'fragment': entry.fragment,
           },
     ];
 
@@ -443,11 +442,7 @@ Map<String, dynamic> loadEpubNativeChapterWindow(
           .join('|');
       final parsedStyles = parsedStylesByKey.putIfAbsent(
         styleKey,
-        () => _parseStyleSources(
-          stylesheets,
-          familyPrefix: familyPrefix,
-          availablePaths: files.keys.toSet(),
-        ),
+        () => _parseStyleSources(stylesheets, familyPrefix: familyPrefix),
       );
       final parsedChapter = _parseChapterDocument(
         chapter,
@@ -653,14 +648,7 @@ List<_EpubNavigationEntry> _navigationEntriesFromDocument({
     final archivePath = _resolveArchivePath(navigationArchivePath, source);
     final title = labels[point] ?? '';
     if (title.isNotEmpty) {
-      entries.add(
-        _EpubNavigationEntry(
-          title,
-          archivePath,
-          depth,
-          _fragmentFromReference(source),
-        ),
-      );
+      entries.add(_EpubNavigationEntry(title, archivePath, depth));
     }
   }
   if (entries.isNotEmpty) return entries;
@@ -690,14 +678,7 @@ List<_EpubNavigationEntry> _navigationEntriesFromDocument({
       final archivePath = _resolveArchivePath(navigationArchivePath, reference);
       final title = anchor.text.trim();
       if (title.isNotEmpty) {
-        entries.add(
-          _EpubNavigationEntry(
-            title,
-            archivePath,
-            depth,
-            _fragmentFromReference(reference),
-          ),
-        );
+        entries.add(_EpubNavigationEntry(title, archivePath, depth));
       }
     }
   }
@@ -705,29 +686,11 @@ List<_EpubNavigationEntry> _navigationEntriesFromDocument({
 }
 
 class _EpubNavigationEntry {
-  const _EpubNavigationEntry(
-    this.title,
-    this.archivePath,
-    this.depth,
-    this.fragment,
-  );
+  const _EpubNavigationEntry(this.title, this.archivePath, this.depth);
 
   final String title;
   final String archivePath;
   final int depth;
-  final String? fragment;
-}
-
-String? _fragmentFromReference(String reference) {
-  final marker = reference.indexOf('#');
-  if (marker < 0 || marker == reference.length - 1) return null;
-  final raw = reference.substring(marker + 1).split('?').first.trim();
-  if (raw.isEmpty) return null;
-  try {
-    return Uri.decodeComponent(raw);
-  } on FormatException {
-    return raw;
-  }
 }
 
 String _normalizeArchivePath(String value) {
@@ -831,7 +794,6 @@ List<_StyleSource> _stylesheetsForDocument({
 _ParsedStyles _parseStyleSources(
   List<_StyleSource> sources, {
   required String familyPrefix,
-  required Set<String> availablePaths,
 }) {
   final rules = <_CssRule>[];
   final fontFaces = <String, _FontFace>{};
@@ -846,32 +808,18 @@ _ParsedStyles _parseStyleSources(
     for (final match in fontFacePattern.allMatches(css)) {
       final declarations = _declarations(match.group(1) ?? '');
       final alias = _firstFontFamily(declarations['font-family']);
-      if (alias == null) continue;
-      String? archivePath;
-      for (final sourceMatch in RegExp(
-        r'url\(\s*([^)]+?)\s*\)',
-        caseSensitive: false,
-      ).allMatches(declarations['src'] ?? '')) {
-        final url = sourceMatch
-            .group(1)!
-            .trim()
-            .replaceAll(RegExp(r'''^['"]|['"]$'''), '');
-        if (_isExternalResource(url)) continue;
-        final candidate = _resolveArchivePath(source.archivePath, url);
-        if (availablePaths.contains(candidate)) {
-          archivePath = candidate;
-          break;
-        }
-      }
-      if (archivePath == null) continue;
-      final fontId = sha1
-          .convert(utf8.encode(archivePath))
-          .toString()
-          .substring(0, 16);
-      final registered = 'epub_${familyPrefix}_$fontId';
+      final sourceValue = declarations['src'];
+      final url = sourceValue == null
+          ? null
+          : RegExp(r'url\(\s*([^)]+?)\s*\)', caseSensitive: false)
+                .firstMatch(sourceValue)
+                ?.group(1)
+                ?.replaceAll(RegExp(r'''^['"]|['"]$'''), '');
+      if (alias == null || url == null || _isExternalResource(url)) continue;
+      final registered = 'epub_${familyPrefix}_${_identifier(alias)}';
       fontFaces[alias.toLowerCase()] = _FontFace(
         registeredFamily: registered,
-        archivePath: archivePath,
+        archivePath: _resolveArchivePath(source.archivePath, url),
       );
     }
     css = css.replaceAll(fontFacePattern, '');
@@ -922,7 +870,6 @@ _ParsedChapter _parseChapterDocument(
   final plainText = StringBuffer();
   final blocks = <Map<String, dynamic>>[];
   final fonts = <String, String>{};
-  final anchors = <String, int>{};
   final styleCache = <html_dom.Element, _EpubTextStyle>{};
 
   _EpubTextStyle styleFor(html_dom.Element element) {
@@ -1009,7 +956,6 @@ _ParsedChapter _parseChapterDocument(
       chapterArchivePath: chapterArchivePath,
     );
     plainText.write(content.text);
-    anchors.addAll(content.anchors);
     for (final run in content.runs) {
       final family = run.style.fontFamily;
       if (family != null) extractFont(family);
@@ -1042,7 +988,6 @@ _ParsedChapter _parseChapterDocument(
     'depth': chapter['depth'] as int? ?? 0,
     'plainText': plainText.toString(),
     'blocks': blocks,
-    'anchors': anchors,
   }, fonts);
 }
 
@@ -1054,7 +999,6 @@ _InlineContent _collectInlineContent(
   final output = StringBuffer();
   final runs = <_InlineRun>[];
   final images = <_InlineImage>[];
-  final anchors = <String, int>{};
   var pendingSpace = false;
   var trailingNewlines = 0;
   const paragraphStyle = _EpubTextStyle();
@@ -1141,12 +1085,6 @@ _InlineContent _collectInlineContent(
       final style = styleFor(child);
       final isBlock = _textBlockTags.contains(tag);
       if (isBlock) appendParagraphBoundary();
-      final id = child.id.trim();
-      if (id.isNotEmpty) anchors.putIfAbsent(id, () => output.length);
-      final name = child.attributes['name']?.trim();
-      if (name != null && name.isNotEmpty) {
-        anchors.putIfAbsent(name, () => output.length);
-      }
       visit(child, style, preformatted || tag == 'pre');
       if (isBlock) appendParagraphBoundary();
     }
@@ -1177,11 +1115,8 @@ _InlineContent _collectInlineContent(
         image.resourcePath,
       );
     }
-    for (final entry in anchors.entries.toList(growable: false)) {
-      anchors[entry.key] = (entry.value - leading).clamp(0, text.length);
-    }
   }
-  return _InlineContent(text, runs, images, anchors);
+  return _InlineContent(text, runs, images);
 }
 
 bool _isImageElement(html_dom.Element element) {
@@ -1440,31 +1375,9 @@ class _EpubTextStyle {
       nextItalic = true;
     }
     var nextFamily = fontFamily;
-    final familyDeclaration = declarations['font-family'];
-    if (familyDeclaration != null) {
-      nextFamily = null;
-      for (final rawFamily in familyDeclaration.split(',')) {
-        final family = rawFamily
-            .trim()
-            .replaceAll(RegExp(r'''^['"]|['"]$'''), '')
-            .trim();
-        if (family.isEmpty) continue;
-        final embedded = fontFaces[family.toLowerCase()];
-        if (embedded != null) {
-          nextFamily = embedded.registeredFamily;
-          break;
-        }
-        if (const <String>{
-          'serif',
-          'sans-serif',
-          'monospace',
-          'cursive',
-          'fantasy',
-        }.contains(family.toLowerCase())) {
-          nextFamily = family.toLowerCase();
-          break;
-        }
-      }
+    final family = _firstFontFamily(declarations['font-family']);
+    if (family != null) {
+      nextFamily = fontFaces[family.toLowerCase()]?.registeredFamily ?? family;
     }
     return _EpubTextStyle(
       fontScale: nextScale,
@@ -1505,12 +1418,11 @@ class _InlineImage {
 }
 
 class _InlineContent {
-  const _InlineContent(this.text, this.runs, this.images, this.anchors);
+  const _InlineContent(this.text, this.runs, this.images);
 
   final String text;
   final List<_InlineRun> runs;
   final List<_InlineImage> images;
-  final Map<String, int> anchors;
 }
 
 class _ParsedChapter {

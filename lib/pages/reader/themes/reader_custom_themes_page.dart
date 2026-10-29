@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xxread/core/reader/reader_custom_theme.dart';
 import 'package:xxread/core/reader/reader_theme_order.dart';
@@ -9,7 +8,6 @@ import 'package:xxread/services/core/reader_theme_background_service.dart';
 import 'package:xxread/utils/localization_extension.dart';
 import 'package:xxread/utils/reader_themes.dart';
 import 'package:xxread/widgets/reader_theme_background.dart';
-import 'package:xxread/widgets/floating_subpage_scaffold.dart';
 
 import 'reader_custom_theme_page.dart';
 
@@ -231,25 +229,25 @@ class _ReaderCustomThemesPageState extends State<ReaderCustomThemesPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) unawaited(_finish());
       },
-      child: FloatingSubpageScaffold(
-        title: context.l10n.readerThemeTitle,
-        headerHeight: 58,
-        onBack: _finish,
-        actions: [
-          FloatingSubpageAction(
-            key: const ValueKey('add-custom-reader-theme'),
-            onPressed: _addTheme,
-            icon: Icons.add_rounded,
-            tooltip: context.l10n.readerCustomThemeAdd,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: _finish,
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           ),
-        ],
-        body: Padding(
-          padding: EdgeInsets.only(
-            top: FloatingSubpageScaffold.headerExtentOf(
-              context,
-              headerHeight: 58,
+          title: Text(context.l10n.readerThemeTitle),
+          actions: [
+            IconButton(
+              key: const ValueKey('add-custom-reader-theme'),
+              onPressed: _addTheme,
+              icon: const Icon(Icons.add_rounded),
+              tooltip: context.l10n.readerCustomThemeAdd,
             ),
-          ),
+            const SizedBox(width: 6),
+          ],
+        ),
+        body: SafeArea(
           child: Column(
             children: [
               Padding(
@@ -284,7 +282,6 @@ class _ReaderCustomThemesPageState extends State<ReaderCustomThemesPage> {
               ),
               Expanded(
                 child: ReorderableListView.builder(
-                  scrollCacheExtent: const ScrollCacheExtent.pixels(600),
                   padding: const EdgeInsets.fromLTRB(18, 4, 18, 120),
                   buildDefaultDragHandles: false,
                   itemCount: _themeOrder.length,

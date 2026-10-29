@@ -2,12 +2,13 @@
 cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
-# The name of the executable created for the application. Change this to change
-# the on-disk name of your application.
-set(BINARY_NAME "xxread")
+# Keep the native CMake target ASCII-only for compatibility across Linux
+# toolchains. The localized application name is configured in the UI layer.
+set(BINARY_NAME "open_reading")
+
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "org.example.xxread")
+set(APPLICATION_ID "com.niki.xxread")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -92,6 +93,16 @@ set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
+# Include the desktop entry in release bundles so distro packages can install
+# the declared book-file associations without maintaining a second manifest.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/open-reading.desktop"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications"
+  COMPONENT Runtime)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/images/app_icon_desktop.png"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/256x256/apps"
+  RENAME "open-reading.png"
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

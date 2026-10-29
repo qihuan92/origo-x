@@ -89,36 +89,6 @@ void main() {
       second.annotationId,
     });
   });
-
-  test('text annotations merge without loading ink at the same CFI', () async {
-    final text = _note(
-      annotationId: '4c521a0b-59eb-4bec-8742-85eb693fca7b',
-      readerNote: 'text note',
-    );
-    final textId = await dao.insertBookNote(text);
-    await dao.insertBookNote(
-      _note(
-        annotationId: 'af673336-a4ba-4be2-b3dc-76a067ec72c4',
-        type: 'ink',
-        payloadJson: '{"stroke":1}',
-      ),
-    );
-
-    final mergedId = await dao.insertBookNote(
-      _note(
-        annotationId: '98f94488-8b83-4517-8786-f30c25fdab68',
-        type: 'underline',
-        readerNote: 'merged note',
-      ),
-    );
-
-    expect(mergedId, textId);
-    final notes = await dao.selectBookNoteByCfiAndBookId('shared-cfi', 1);
-    expect(notes, hasLength(2));
-    final merged = notes.singleWhere((note) => note.type != 'ink');
-    expect(merged.type, 'underline');
-    expect(merged.readerNote, 'text note\n\nmerged note');
-  });
 }
 
 BookNote _note({

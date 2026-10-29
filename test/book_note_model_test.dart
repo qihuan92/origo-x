@@ -73,24 +73,12 @@ void main() {
     );
   });
 
-  test('legacy ink remains readable from persisted data', () {
-    final note = BookNote.fromMap({
-      'id': 2,
-      'book_id': 1,
-      'content': '',
-      'cfi': 'legacy-ink-cfi',
-      'chapter': 'chapter',
-      'type': 'ink',
-      'color': '66CCFF',
-      'reader_note': null,
-      'page_number': null,
-      'start_offset': null,
-      'end_offset': null,
-      'create_time': null,
-      'update_time': DateTime.utc(2026).toIso8601String(),
-    });
-
-    expect(note.type, 'ink');
+  test('legacy ink remains readable but is not exposed for creation', () {
+    expect(
+      BookNote.noteTypes.map((entry) => entry['type']),
+      isNot(contains('ink')),
+    );
+    expect(BookNote.getTypeName('ink'), 'ink');
   });
 }
 

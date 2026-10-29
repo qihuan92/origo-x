@@ -112,12 +112,7 @@ class ReaderCustomThemeStore {
   Future<List<ReaderCustomTheme>> loadAll() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(storageKey);
-    if (raw != null) {
-      final decoded = _decodeList(raw);
-      if (decoded != null) return decoded;
-      // Keep the original preference available for local recovery.
-      return const [];
-    }
+    if (raw != null) return _decodeList(raw);
 
     final legacyRaw = prefs.getString(legacyStorageKey);
     if (legacyRaw == null || legacyRaw.isEmpty) return const [];
@@ -127,11 +122,7 @@ class ReaderCustomThemeStore {
       final migrated = ReaderCustomTheme.fromMap(decoded);
       await saveAll([migrated]);
       return [migrated];
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Discarding invalid legacy reader theme (${error.runtimeType}).',
-      );
-      debugPrintStack(stackTrace: stackTrace);
+    } catch (_) {
       return const [];
     }
   }
@@ -166,36 +157,25 @@ class ReaderCustomThemeStore {
     await saveAll(themes);
   }
 
-  List<ReaderCustomTheme>? _decodeList(String raw) {
+  List<ReaderCustomTheme> _decodeList(String raw) {
     if (raw.isEmpty) return const [];
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List<Object?>) {
-        throw const FormatException('Reader theme root must be a list.');
-      }
+      if (decoded is! List<Object?>) return const [];
       final result = <ReaderCustomTheme>[];
       final ids = <String>{};
       for (final item in decoded) {
         if (item is! Map<String, dynamic>) continue;
-        try {
-          final theme = ReaderCustomTheme.fromMap(item);
-          if (!ReaderCustomTheme.isCustomThemeId(theme.id) ||
-              !ids.add(theme.id)) {
-            continue;
-          }
-          result.add(theme);
-        } catch (error, stackTrace) {
-          debugPrint(
-            'Skipping an invalid reader theme (${error.runtimeType}).',
-          );
-          debugPrintStack(stackTrace: stackTrace);
+        final theme = ReaderCustomTheme.fromMap(item);
+        if (!ReaderCustomTheme.isCustomThemeId(theme.id) ||
+            !ids.add(theme.id)) {
+          continue;
         }
+        result.add(theme);
       }
       return result;
-    } catch (error, stackTrace) {
-      debugPrint('Ignoring invalid reader theme cache (${error.runtimeType}).');
-      debugPrintStack(stackTrace: stackTrace);
-      return null;
+    } catch (_) {
+      return const [];
     }
   }
 }

@@ -1,19 +1,14 @@
-# Reader indentation font
+# Bundled fonts
 
-`ReaderIndent.ttf` is original Origo X layout data under the repository's
-[AGPL license](../../LICENSE). It contains only an empty U+00A0 (no-break space)
-glyph with an advance of exactly one em. Use it only for generated reader
-indentation; it is neither a reading font nor a fallback for body text.
+The font binaries in this directory are third-party works. They are not
+relicensed under Open Reading's AGPL license.
 
-Its ascent, descent, and line gap are zero. The indentation span must explicitly
-use `height: kTextHeightNone`, `letterSpacing: 0`, and `wordSpacing: 0`; inheriting
-a nonzero line-height multiplier with zero font metrics can produce invalid
-layout metrics. Paragraph separators must keep the body font and line height.
+| Flutter family | Upstream font | Purpose | License |
+| --- | --- | --- | --- |
+| `SourceHanSerifCN` | Noto Serif SC / Source Han Serif | Default App UI serif and optional reading font | SIL OFL 1.1 (`licenses/NotoSerifSC-OFL.txt`) |
+| `SourceHanSansCN` | Source Han Sans CN | App UI and reading sans serif | SIL OFL 1.1 (`licenses/SourceHanSans-OFL.txt`) |
+| `InstrumentSans` | Instrument Sans | Optional App UI sans serif | SIL OFL 1.1 (`licenses/InstrumentSans-OFL.txt`) |
+| `Newsreader` | Newsreader 16pt | Optional editorial reading serif | SIL OFL 1.1 (`licenses/Newsreader-OFL.txt`) |
+| `JetBrainsMono` | JetBrains Mono | Optional technical/monospace font | SIL OFL 1.1 (`licenses/JetBrainsMono-OFL.txt`) |
 
-Regenerate with `python3 tool/generate_reader_indent_font.py`, or verify the
-checked-in bytes with `python3 tool/generate_reader_indent_font.py --check`.
-The generator uses only the Python standard library and fixed metadata.
-
-The source edition uses operating-system fonts and locally imported font files.
-It contains no online font catalog or download service. Historical third-party
-license notices are retained in `licenses/`.
+Keep the corresponding license file with every redistributed copy of a font.

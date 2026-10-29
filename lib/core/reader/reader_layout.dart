@@ -38,7 +38,6 @@ class ReaderLayoutFingerprint {
     required this.contentKey,
     required this.viewport,
     required this.fontSize,
-    this.fontWeight = 400,
     required this.lineHeight,
     this.letterSpacing = 0,
     this.textAlign = TextAlign.start,
@@ -56,7 +55,6 @@ class ReaderLayoutFingerprint {
   final String contentKey;
   final Size viewport;
   final double fontSize;
-  final int fontWeight;
   final double lineHeight;
   final double letterSpacing;
   final TextAlign textAlign;
@@ -78,8 +76,7 @@ class ReaderLayoutFingerprint {
     ].map((size) => textScaler.scale(size).toStringAsFixed(3)).join(',');
     return '$version:$contentKey:${viewport.width.toStringAsFixed(2)}:'
         '${viewport.height.toStringAsFixed(2)}:'
-        '${fontSize.toStringAsFixed(2)}:$fontWeight:'
-        '${lineHeight.toStringAsFixed(3)}:'
+        '${fontSize.toStringAsFixed(2)}:${lineHeight.toStringAsFixed(3)}:'
         '${letterSpacing.toStringAsFixed(2)}:${textAlign.name}:'
         '${horizontalMargin.toStringAsFixed(2)}:'
         '${verticalMargin.toStringAsFixed(2)}:$scalerKey:'

@@ -47,15 +47,16 @@ class BookNoteDao {
 
     // Ink strokes at the same locator are independent records. Text
     // annotations retain the historical merge-by-CFI behavior.
-    final existing = bookNote.type == 'ink'
-        ? null
-        : await _selectLatestTextNoteByCfiAndBookId(
+    final existingNotes = bookNote.type == 'ink'
+        ? const <BookNote>[]
+        : (await selectBookNoteByCfiAndBookId(
             bookNote.cfi,
             bookNote.bookId,
-          );
+          )).where((note) => note.type != 'ink').toList();
 
-    if (existing != null) {
+    if (existingNotes.isNotEmpty) {
       // 合并现有注释
+      final existing = existingNotes.last;
       final merged = _mergeBookNotes(existing, bookNote);
       await updateBookNoteById(merged);
       return existing.id!;
@@ -77,21 +78,6 @@ class BookNoteDao {
       whereArgs: [cfi, bookId],
     );
     return List.generate(maps.length, (i) => BookNote.fromMap(maps[i]));
-  }
-
-  Future<BookNote?> _selectLatestTextNoteByCfiAndBookId(
-    String cfi,
-    int bookId,
-  ) async {
-    final db = await _database;
-    final maps = await db.query(
-      'book_notes',
-      where: 'cfi = ? AND book_id = ? AND type != ?',
-      whereArgs: [cfi, bookId, 'ink'],
-      orderBy: 'id DESC',
-      limit: 1,
-    );
-    return maps.isEmpty ? null : BookNote.fromMap(maps.first);
   }
 
   /// 根据书籍ID获取所有注释

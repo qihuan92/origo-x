@@ -47,7 +47,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
   bool _longPressExpired = false;
   Offset? _pointerDown;
   Offset? _dragOrigin;
-  _ReaderShaderPageCurlState? _delegatedGestureLeaf;
   Offset? _catchUpStartPointer;
   Offset? _latestDragPointer;
   ReaderPageTurnDirection? _direction;
@@ -56,9 +55,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
   ReaderPageSnapshot? _activeSourcePage;
   ReaderPageSnapshot? _activeTargetPage;
   ReaderPageSnapshot? _activeBackPage;
-  ui.Image? _activeSourceImage;
-  ui.Image? _activeBackImage;
-  bool _activeSourceUsesProvisional = false;
   GlobalKey? _activeSourceKey;
   GlobalKey? _activeTargetKey;
   GlobalKey? _activeBackKey;
@@ -66,7 +62,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
   bool _warmScheduled = false;
   bool _warmAfterTurn = false;
   bool _routeWorkEnabled = false;
-  int _buildCount = 0;
   int _captureGeneration = 0;
   int _preparedGeneration = -1;
   int _preparingGeneration = -1;
@@ -85,9 +80,7 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     );
     _catchUpTicker = createTicker(_onCatchUpTick);
     widget.controller?._attach(this);
-    widget.coordinator
-      ?..addListener(_onCoordinatorAvailable)
-      .._attachLeaf(widget.bindingEdge, this);
+    widget.coordinator?.addListener(_onCoordinatorAvailable);
     unawaited(_loadClassicFoldShader());
   }
 
@@ -110,18 +103,13 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
       oldWidget.controller?._detach(this);
       widget.controller?._attach(this);
     }
-    if (!identical(oldWidget.coordinator, widget.coordinator) ||
-        oldWidget.bindingEdge != widget.bindingEdge) {
-      oldWidget.coordinator
-        ?..removeListener(_onCoordinatorAvailable)
-        .._detachLeaf(oldWidget.bindingEdge, this);
+    if (!identical(oldWidget.coordinator, widget.coordinator)) {
+      oldWidget.coordinator?.removeListener(_onCoordinatorAvailable);
       if (identical(_ownedCoordinator, oldWidget.coordinator)) {
         oldWidget.coordinator?._release(this);
         _ownedCoordinator = null;
       }
-      widget.coordinator
-        ?..addListener(_onCoordinatorAvailable)
-        .._attachLeaf(widget.bindingEdge, this);
+      widget.coordinator?.addListener(_onCoordinatorAvailable);
     }
     final pagesChanged =
         !_sameSnapshot(oldWidget.currentPage, widget.currentPage) ||
@@ -151,9 +139,7 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.controller?._detach(this);
-    widget.coordinator
-      ?..removeListener(_onCoordinatorAvailable)
-      .._detachLeaf(widget.bindingEdge, this);
+    widget.coordinator?.removeListener(_onCoordinatorAvailable);
     _ownedCoordinator?._release(this);
     _ownedCoordinator = null;
     final completer = _turnCompleter;
@@ -167,7 +153,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     _forwardSpringTicker.dispose();
     _backwardSpringTicker.dispose();
     _snapshotCache.dispose();
-    _disposeActiveSnapshotPins();
     for (final image in _retiredSnapshotImages) {
       image.dispose();
     }
@@ -359,6 +344,7 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     );
     if (retired != null) _retiredSnapshotImages.add(retired);
     if (replacesProvisional) _syncSnapshotKeys.remove(page.key);
+    if (mounted) setState(() {});
     return image;
   }
 
@@ -392,11 +378,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     if (event.pointer != _activePointer) return;
     _velocityTracker?.addPosition(event.timeStamp, event.position);
     if (_longPressExpired) return;
-    final delegatedLeaf = _delegatedGestureLeaf;
-    if (delegatedLeaf != null) {
-      delegatedLeaf._onDelegatedPanUpdate(globalPosition: event.position);
-      return;
-    }
     if (!_pointerMoveStarted) {
       _pointerMoveStarted = true;
       _onPanStart(
@@ -423,24 +404,14 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     final tracker = _velocityTracker
       ?..addPosition(event.timeStamp, event.position);
     final velocity = tracker?.getVelocity() ?? Velocity.zero;
-    final delegatedLeaf = _delegatedGestureLeaf;
     _clearPointerTracking();
-    if (delegatedLeaf != null) {
-      delegatedLeaf._onPanEnd(DragEndDetails(velocity: velocity));
-    } else {
-      _onPanEnd(DragEndDetails(velocity: velocity));
-    }
+    _onPanEnd(DragEndDetails(velocity: velocity));
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
     if (event.pointer != _activePointer) return;
-    final delegatedLeaf = _delegatedGestureLeaf;
     _clearPointerTracking();
-    if (delegatedLeaf != null) {
-      delegatedLeaf._onPanCancel();
-    } else {
-      _onPanCancel();
-    }
+    _onPanCancel();
   }
 
   void _clearPointerTracking() {
@@ -450,7 +421,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     _selectionHoldTimer = null;
     _pointerMoveStarted = false;
     _longPressExpired = false;
-    _delegatedGestureLeaf = null;
   }
 
   void _onPanStart(DragStartDetails details) {
@@ -511,7 +481,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
         if (delta.dx.abs() < delta.dy.abs() * intentRatio) return;
       }
       if (!_hasPage(direction)) {
-        if (_beginDelegatedGesture(direction, details.globalPosition)) return;
         _resetToIdle();
         return;
       }
@@ -541,57 +510,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     });
   }
 
-  bool _beginDelegatedGesture(
-    ReaderPageTurnDirection direction,
-    Offset globalPosition,
-  ) {
-    final coordinator = widget.coordinator;
-    final targetLeaf = coordinator?._leafFor(direction);
-    if (targetLeaf == null || identical(targetLeaf, this)) return false;
-    final started = targetLeaf._beginDelegatedDrag(direction, globalPosition);
-    if (!started) return false;
-    _delegatedGestureLeaf = targetLeaf;
-    _selectionHoldTimer?.cancel();
-    _selectionHoldTimer = null;
-    _pointerDown = null;
-    _dragOrigin = null;
-    _pendingDirection = null;
-    setState(() => _phase = _PageTurnPhase.idle);
-    return true;
-  }
-
-  bool _beginDelegatedDrag(
-    ReaderPageTurnDirection direction,
-    Offset globalPosition,
-  ) {
-    if (_phase != _PageTurnPhase.idle || _viewportSize.isEmpty) return false;
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.hasSize) return false;
-    final localPosition = renderBox.globalToLocal(globalPosition);
-    return _beginDrag(
-      direction,
-      pointer: localPosition,
-      origin: localPosition,
-      catchUpFromEdge: _motionFor(direction) == ReaderPageTurnMotion.outgoing,
-    );
-  }
-
-  void _onDelegatedPanUpdate({required Offset globalPosition}) {
-    if (_phase != _PageTurnPhase.dragging || _direction == null) return;
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.hasSize) return;
-    final localPosition = renderBox.globalToLocal(globalPosition);
-    _latestDragPointer = localPosition;
-    if (_catchUpStartPointer != null) return;
-    setState(() {
-      _geometry = _geometryFromPointer(
-        direction: _direction!,
-        pointer: localPosition,
-        origin: _dragOrigin!,
-      );
-    });
-  }
-
   bool _beginDrag(
     ReaderPageTurnDirection direction, {
     required Offset pointer,
@@ -604,7 +522,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     _selectionHoldTimer = null;
     final source = layers.source;
     final target = layers.target;
-    _disposeActiveSnapshotPins();
     _direction = direction;
     _pendingDirection = null;
     _dragOrigin = origin;
@@ -627,12 +544,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
         refreshAfterPreparation: !_sameSnapshot(back, widget.currentPage),
       );
     }
-    _activeSourceImage = _cachedImage(source)?.clone();
-    _activeBackImage = layers.back == null
-        ? null
-        : _cachedImage(layers.back)?.clone();
-    _activeSourceUsesProvisional =
-        _activeSourceImage != null && _syncSnapshotKeys.contains(source.key);
     final initialPointer = catchUpFromEdge
         ? Offset(
             direction == ReaderPageTurnDirection.forward
@@ -698,10 +609,11 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     final linearProgress =
         (elapsed.inMicroseconds / _middleDragCatchUpDuration.inMicroseconds)
             .clamp(0.0, 1.0);
-    // Keep the edge origin visible, but move it promptly enough that a
-    // middle-of-page drag feels attached to the finger. The cubic variant
-    // spent too much of this 120 ms catch-up barely moving at the edge.
-    final horizontalProgress = Curves.easeInOut.transform(linearProgress);
+    // A front-loaded ease-out made the first painted fold jump most of the
+    // distance in one or two frames. Ease-in-out keeps the edge origin visible
+    // before accelerating into the live pointer, while remaining short enough
+    // to feel like catch-up rather than a separate animation.
+    final horizontalProgress = Curves.easeInOutCubic.transform(linearProgress);
     // Keep the first part of a middle-origin catch-up as a flat vertical roll.
     // Feeding small pointer-Y jitter into the almost-collapsed right-edge curl
     // rotates a very thin polygon and can produce one or two malformed frames.
@@ -788,13 +700,8 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     final sourceKey = _direction == direction && _activeSourceKey != null
         ? _activeSourceKey!
         : layers.sourceKey;
-    final sourceImage = await _ensureSnapshot(
-      source,
-      sourceKey,
-      _captureGeneration,
-    );
-    if (!mounted || _direction != direction) return;
-    var pinsChanged = _pinActiveSourceImage(source, sourceImage);
+    await _ensureSnapshot(source, sourceKey, _captureGeneration);
+    if (!mounted) return;
     final back = _direction == direction && _activeBackPage != null
         ? _activeBackPage
         : layers.back;
@@ -802,48 +709,8 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
         ? _activeBackKey
         : layers.backKey;
     if (back != null && backKey != null) {
-      final backImage = await _ensureSnapshot(
-        back,
-        backKey,
-        _captureGeneration,
-      );
-      if (!mounted || _direction != direction) return;
-      pinsChanged = _pinActiveBackImage(back, backImage) || pinsChanged;
+      await _ensureSnapshot(back, backKey, _captureGeneration);
     }
-    if (pinsChanged && mounted && _direction == direction) setState(() {});
-  }
-
-  bool _pinActiveSourceImage(ReaderPageSnapshot page, ui.Image? image) {
-    final active = _activeSourcePage;
-    if (image == null ||
-        _activeSourceImage != null ||
-        active == null ||
-        !_sameSnapshot(active, page)) {
-      return false;
-    }
-    _activeSourceImage = image.clone();
-    _activeSourceUsesProvisional = _syncSnapshotKeys.contains(page.key);
-    return true;
-  }
-
-  bool _pinActiveBackImage(ReaderPageSnapshot page, ui.Image? image) {
-    final active = _activeBackPage;
-    if (image == null ||
-        _activeBackImage != null ||
-        active == null ||
-        !_sameSnapshot(active, page)) {
-      return false;
-    }
-    _activeBackImage = image.clone();
-    return true;
-  }
-
-  void _disposeActiveSnapshotPins() {
-    _activeSourceImage?.dispose();
-    _activeBackImage?.dispose();
-    _activeSourceImage = null;
-    _activeBackImage = null;
-    _activeSourceUsesProvisional = false;
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -1189,6 +1056,17 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
         target: target,
       );
     }
+    final terminalSnapDistance = math.max(
+      2.0,
+      math.min(8.0, _viewportSize.width * 0.012),
+    );
+    final snapsToExactTerminal =
+        target != null &&
+        (isIncoming
+            ? (touch.dx - target.dx).abs() <= terminalSnapDistance
+            : channel.commits &&
+                  (touch - target).distance <= terminalSnapDistance);
+    if (snapsToExactTerminal) renderedTouch = target;
     if (mounted) {
       setState(() {
         _geometry = ReaderPageTurnGeometry.fromCanonicalTouch(
@@ -1202,9 +1080,11 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
         );
       });
     }
-    final visuallySettled = isIncoming
-        ? simulationX.isDone(seconds)
-        : simulationX.isDone(seconds) && simulationY.isDone(seconds);
+    final visuallySettled =
+        snapsToExactTerminal ||
+        (isIncoming
+            ? simulationX.isDone(seconds)
+            : simulationX.isDone(seconds) && simulationY.isDone(seconds));
     if (visuallySettled) {
       _stopSpringTicker(channelDirection);
       if (target != null && mounted) {
@@ -1239,14 +1119,7 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
       debugPrint('Reader page turn callback failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     } finally {
-      if (mounted) {
-        // Keep the exact terminal pose through the frame that applies the
-        // host's page update. Clearing the curl in the same microtask can
-        // briefly expose a mismatched live leaf and look like a final-frame
-        // jump even though the spring itself has already settled.
-        await WidgetsBinding.instance.endOfFrame;
-        if (mounted) _completeTurn();
-      }
+      if (mounted) _completeTurn();
     }
   }
 
@@ -1286,7 +1159,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     if (!mounted) return;
     final coordinator = _ownedCoordinator;
     _ownedCoordinator = null;
-    _disposeActiveSnapshotPins();
     setState(() {
       _phase = _PageTurnPhase.idle;
       _direction = null;
@@ -1324,8 +1196,8 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
 
   bool get _animationReady =>
       _geometry != null &&
-      _activeSourceImage != null &&
-      (_activeBackPage == null || _activeBackImage != null) &&
+      _cachedImage(_activeSourcePage) != null &&
+      (_activeBackPage == null || _cachedImage(_activeBackPage) != null) &&
       _activeTargetPage != null &&
       _phase != _PageTurnPhase.idle &&
       _phase != _PageTurnPhase.pointerPending;
@@ -1335,24 +1207,9 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
     ReaderPageSnapshot page, {
     required bool hidden,
   }) {
-    final halfGutter = (widget.coordinator?.gutterWidth ?? 0) / 2;
-    final pageBindingEdge = identical(key, _outgoingBackKey)
-        ? switch (widget.bindingEdge) {
-            ReaderPageBindingEdge.left => ReaderPageBindingEdge.right,
-            ReaderPageBindingEdge.right => ReaderPageBindingEdge.left,
-          }
-        : widget.bindingEdge;
-    final pageChild = halfGutter <= 0
-        ? page.child
-        : Padding(
-            padding: pageBindingEdge == ReaderPageBindingEdge.left
-                ? EdgeInsets.only(left: halfGutter)
-                : EdgeInsets.only(right: halfGutter),
-            child: page.child,
-          );
     final paper = RepaintBoundary(
       key: key,
-      child: ColoredBox(color: widget.paperColor, child: pageChild),
+      child: ColoredBox(color: widget.paperColor, child: page.child),
     );
     if (!hidden) return paper;
     return ExcludeSemantics(child: IgnorePointer(child: paper));
@@ -1360,10 +1217,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
 
   @override
   Widget build(BuildContext context) {
-    assert(() {
-      _buildCount++;
-      return true;
-    }());
     return LayoutBuilder(
       builder: (context, constraints) {
         final nextSize = constraints.biggest;
@@ -1374,14 +1227,14 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
           _scheduleWarmSnapshots();
         }
         final geometry = _geometry;
-        final sourceImage = _activeSourceImage;
-        final backImage = _activeBackImage;
+        final sourceImage = _cachedImage(_activeSourcePage);
+        final backImage = _cachedImage(_activeBackPage);
         final animationReady = _animationReady;
         final boundaryPages = <GlobalKey, ReaderPageSnapshot>{
           _currentKey: widget.currentPage,
-          _backwardKey: ?widget.backwardPage,
-          _forwardKey: ?widget.forwardPage,
-          _outgoingBackKey: ?widget.outgoingBackPage,
+          if (widget.backwardPage case final page?) _backwardKey: page,
+          if (widget.forwardPage case final page?) _forwardKey: page,
+          if (widget.outgoingBackPage case final page?) _outgoingBackKey: page,
         };
         if (_activeSourcePage != null && _activeSourceKey != null) {
           boundaryPages[_activeSourceKey!] = _activeSourcePage!;
@@ -1421,7 +1274,8 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
                       backImage: backImage,
                       bindingOverflow: widget.coordinator == null
                           ? 0
-                          : geometry.size.width,
+                          : geometry.size.width +
+                                widget.coordinator!.gutterWidth,
                     ),
                   ),
                 ),
@@ -1443,7 +1297,6 @@ class _ReaderShaderPageCurlState extends State<ReaderShaderPageCurl>
         shader: _classicFoldShader!,
         sourcePage: sourceImage,
         backPage: backImage,
-        paperColor: widget.paperColor,
         geometry: geometry,
         bindingEdge: widget.bindingEdge,
         bindingOverflow: bindingOverflow,

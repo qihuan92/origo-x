@@ -6,13 +6,11 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'custom_font_models.dart';
-import 'font_variation_parser.dart';
 
 typedef CustomFontDirectoryProvider = Future<Directory> Function();
 typedef CustomFontPicker = Future<FilePickerResult?> Function();
@@ -66,8 +64,7 @@ class CustomFontService {
       await directory.create(recursive: true);
       _fontDirectory = directory;
       await _readManifest();
-    } catch (error) {
-      debugPrint('Custom font storage initialization failed: $error');
+    } catch (_) {
       _isSupported = false;
       _fonts.clear();
     }
@@ -91,34 +88,7 @@ class CustomFontService {
             return record.copyWith(available: file.existsSync());
           }),
         );
-      var metadataChanged = false;
-      for (var index = 0; index < _fonts.length; index++) {
-        final record = _fonts[index];
-        if (!record.available || record.weightAxisInspected) continue;
-        final file = File(path.join(directory.path, record.relativePath));
-        try {
-          final range = parseVariableFontWeightRange(await file.readAsBytes());
-          _fonts[index] = record.copyWith(
-            variableWeightMin: range?.min,
-            variableWeightMax: range?.max,
-            weightAxisInspected: true,
-          );
-          metadataChanged = true;
-        } catch (error) {
-          debugPrint('Custom font metadata inspection failed: $error');
-        }
-      }
-      if (metadataChanged) {
-        try {
-          await _writeManifest();
-        } catch (error) {
-          debugPrint(
-            'Custom font metadata migration could not persist: $error',
-          );
-        }
-      }
-    } catch (error) {
-      debugPrint('Custom font manifest is unreadable: $error');
+    } catch (_) {
       _fonts.clear();
     }
   }
@@ -140,7 +110,7 @@ class CustomFontService {
       if (await manifest.exists()) await manifest.delete();
       await temporary.rename(manifest.path);
     } catch (error) {
-      await _deleteFileBestEffort(temporary, context: 'temporary manifest');
+      if (await temporary.exists()) await temporary.delete();
       throw CustomFontException(CustomFontErrorCode.storageFailed, error);
     }
   }
@@ -209,20 +179,16 @@ class CustomFontService {
     final shortHash = hash.substring(0, 16);
     final id = 'custom_$shortHash';
     final storedFileName = '$id$extension';
-    final weightRange = parseVariableFontWeightRange(bytes);
     final record = CustomFontRecord(
       id: id,
       displayName: path.basenameWithoutExtension(fileName).trim(),
-      runtimeFamily: 'OrigoReaderCustom_$shortHash',
+      runtimeFamily: 'OpenReadingCustom_$shortHash',
       fileName: fileName,
       relativePath: storedFileName,
       format: extension.substring(1),
       sha256: hash,
       fileSize: bytes.length,
       importedAt: DateTime.now().toUtc(),
-      variableWeightMin: weightRange?.min,
-      variableWeightMax: weightRange?.max,
-      weightAxisInspected: true,
     );
     final destination = File(path.join(_fontDirectory!.path, storedFileName));
 
@@ -278,27 +244,13 @@ class CustomFontService {
       await _registrar(record.runtimeFamily, bytes);
       _loadedFontIds.add(id);
       return true;
-    } catch (error) {
-      debugPrint(
-        'Custom font could not be loaded (${record.fileName}): $error',
-      );
+    } catch (_) {
       final index = _fonts.indexWhere((font) => font.id == id);
       if (index >= 0) {
         _fonts[index] = record.copyWith(available: false);
         await _writeManifest();
       }
       return false;
-    }
-  }
-
-  Future<void> _deleteFileBestEffort(
-    File file, {
-    required String context,
-  }) async {
-    try {
-      if (await file.exists()) await file.delete();
-    } catch (error) {
-      debugPrint('Failed to remove custom font $context: $error');
     }
   }
 

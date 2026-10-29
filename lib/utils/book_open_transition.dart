@@ -82,6 +82,7 @@ class BookOpenTransition {
   BookOpenTransition._();
 
   static const double _readerWorkExitCutoff = 0.40;
+  static const _slowLoadingRevealDelay = Duration(milliseconds: 850);
   static final ValueNotifier<bool> _navigationHiddenListenable = ValueNotifier(
     false,
   );
@@ -128,33 +129,9 @@ class BookOpenTransition {
         .markContentReady();
   }
 
-  /// Applies the opening reveal to reader content only. The themed canvas,
-  /// loading feedback, controls, and back navigation must stay visible and
-  /// interactive while a slow book is still preparing its first page.
-  static Widget buildReaderContentReveal(
-    BuildContext context, {
-    required Widget child,
-  }) {
-    final activity = context
-        .getInheritedWidgetOfExactType<_BookOpenTransitionScope>()
-        ?.activity;
-    if (activity == null) return child;
-    final content = TickerMode(
-      key: const ValueKey('book-open-transition-reader-content-mode'),
-      enabled: ReaderTransitionWorkScope.enabledOf(context),
-      child: child,
-    );
-    if (activity._hasCoverFlight) return content;
-    return _BookReadyContentFade(
-      activity: activity,
-      animationPace: activity._animationPace,
-      child: content,
-    );
-  }
-
   /// 打开动画的完整可见过程（封面飞行 + 正文渐显）结束后变为 true。
   ///
-  /// 路由动画 460ms 结束时正文渐显往往仍在播放；相邻章节排版
+  /// 路由动画 460ms 结束时正文渐显往往仍在播放；相邻章节排版、系统栏切换
   /// 等高成本工作应等待此信号，避免掉帧落在动画后半段。无封面飞行的平滑
   /// 转场在入场完成后即视为结束。不在打开转场路由中时返回 null。
   static ValueListenable<bool>? openingFlightSettledListenableOf(
@@ -198,40 +175,33 @@ class BookOpenTransition {
   }
 
   static PageRoute<T> createRoute<T extends Object?>(
-    WidgetBuilder pageBuilder, {
+    Widget page, {
     BookOpenAnimation? animation,
     LibraryBookOpenAnimation? libraryAnimation,
-    LibraryBookOpenAnimationPace animationPace =
-        LibraryBookOpenAnimationPace.fast,
     Color? readerBackgroundColor,
     ReaderPageTransitionOrigin origin = ReaderPageTransitionOrigin.standard,
     bool waitForReaderReady = false,
   }) {
     final activity = BookOpenTransitionActivity._(
-      holdOpeningCover: waitForReaderReady,
+      holdOpeningCover: animation != null && waitForReaderReady,
       hasCoverFlight: animation != null,
-      animationPace: animationPace,
     );
-    final readerPage = Builder(builder: pageBuilder);
     if (animation == null) {
       return CustomPageTransitions.createSmoothReaderPageRoute<T>(
-        readerPage,
+        page,
         origin: origin,
         libraryAnimation: libraryAnimation,
-        animationPace: animationPace,
         backgroundColor: readerBackgroundColor,
-        routeWrapper: (route, routeAnimation, child) {
-          final activityScope = _BookOpenActivityScope(
-            activity: activity,
-            transitionAnimation: routeAnimation,
-            predictiveBackInProgress: () => route.popGestureInProgress,
-            child: child,
-          );
-          return _AndroidPredictiveBackDriver(
-            route: route,
-            child: activityScope,
-          );
-        },
+        routeWrapper: (route, routeAnimation, child) =>
+            _AndroidPredictiveBackDriver(
+              route: route,
+              child: _BookOpenActivityScope(
+                activity: activity,
+                transitionAnimation: routeAnimation,
+                predictiveBackInProgress: () => route.popGestureInProgress,
+                child: child,
+              ),
+            ),
       );
     }
     late final PageRouteBuilder<T> route;
@@ -242,16 +212,11 @@ class BookOpenTransition {
           activity: activity,
           transitionAnimation: pageAnimation,
           predictiveBackInProgress: () => route.popGestureInProgress,
-          child: readerPage,
+          child: page,
         ),
       ),
-      transitionDuration: animationPace == LibraryBookOpenAnimationPace.elegant
-          ? const Duration(milliseconds: 760)
-          : const Duration(milliseconds: 460),
-      reverseTransitionDuration:
-          animationPace == LibraryBookOpenAnimationPace.elegant
-          ? const Duration(milliseconds: 480)
-          : const Duration(milliseconds: 320),
+      transitionDuration: const Duration(milliseconds: 460),
+      reverseTransitionDuration: const Duration(milliseconds: 360),
       opaque: true,
       barrierColor: Colors.transparent,
       // Keep the live destination mounted behind the cover flight so parsing
@@ -263,7 +228,6 @@ class BookOpenTransition {
           animation: routeAnimation,
           data: animation,
           activity: activity,
-          animationPace: animationPace,
           readerBackgroundColor: readerBackgroundColor,
           predictiveBackInProgress: () => route.popGestureInProgress,
           child: child,
@@ -289,24 +253,31 @@ class BookOpenTransitionActivity {
   BookOpenTransitionActivity._({
     bool holdOpeningCover = false,
     this._hasCoverFlight = false,
-    this._animationPace = LibraryBookOpenAnimationPace.fast,
   }) : _openingPhase = ValueNotifier(
          holdOpeningCover
              ? _BookOpeningPhase.waiting
              : _BookOpeningPhase.content,
        ) {
     BookOpenTransition._registerActiveRoute();
+    if (holdOpeningCover) {
+      _slowLoadingTimer = Timer(BookOpenTransition._slowLoadingRevealDelay, () {
+        if (!_disposed && _openingPhase.value == _BookOpeningPhase.waiting) {
+          _openingPhase.value = _BookOpeningPhase.loading;
+        }
+      });
+    }
   }
 
   final bool _hasCoverFlight;
-  final LibraryBookOpenAnimationPace _animationPace;
   final ValueNotifier<_BookOpeningPhase> _openingPhase;
   final ValueNotifier<bool> _flightSettled = ValueNotifier(false);
   final ValueNotifier<bool> _coverHoldReached = ValueNotifier(false);
+  Timer? _slowLoadingTimer;
   bool _disposed = false;
 
   void markContentReady() {
     if (_disposed || _openingPhase.value == _BookOpeningPhase.content) return;
+    _slowLoadingTimer?.cancel();
     _openingPhase.value = _BookOpeningPhase.content;
   }
 
@@ -323,11 +294,12 @@ class BookOpenTransitionActivity {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _slowLoadingTimer?.cancel();
     BookOpenTransition._unregisterActiveRoute();
   }
 }
 
-enum _BookOpeningPhase { waiting, content }
+enum _BookOpeningPhase { waiting, loading, content }
 
 class _BookOpenTransitionScope extends InheritedWidget {
   const _BookOpenTransitionScope({
@@ -363,25 +335,17 @@ class _BookOpenActivityScope extends StatefulWidget {
 class _BookOpenActivityScopeState extends State<_BookOpenActivityScope> {
   bool _sawEntranceMotion = false;
   bool _entranceCompleted = false;
-  bool _settledFallbackScheduled = false;
-  Listenable? _scopeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _refreshScopeAnimation();
     _attachTransitionAnimation();
   }
 
   @override
   void didUpdateWidget(covariant _BookOpenActivityScope oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final transitionChanged = !identical(
-      oldWidget.transitionAnimation,
-      widget.transitionAnimation,
-    );
-    final activityChanged = !identical(oldWidget.activity, widget.activity);
-    if (!transitionChanged && !activityChanged) {
+    if (identical(oldWidget.transitionAnimation, widget.transitionAnimation)) {
       return;
     }
     oldWidget.transitionAnimation?.removeStatusListener(
@@ -389,29 +353,11 @@ class _BookOpenActivityScopeState extends State<_BookOpenActivityScope> {
     );
     _sawEntranceMotion = false;
     _entranceCompleted = false;
-    _settledFallbackScheduled = false;
-    _refreshScopeAnimation();
     _attachTransitionAnimation();
-  }
-
-  void _refreshScopeAnimation() {
-    final transitionAnimation = widget.transitionAnimation;
-    _scopeAnimation = transitionAnimation == null
-        ? null
-        : Listenable.merge([
-            transitionAnimation,
-            widget.activity._flightSettled,
-          ]);
   }
 
   void _attachTransitionAnimation() {
     final transitionAnimation = widget.transitionAnimation;
-    // A fade-only route has no cover flight to protect. Let the reader start
-    // pagination immediately so the ready-driven opacity timeline can overlap
-    // the route animation instead of leaving a blank surface until it ends.
-    if (!widget.activity._hasCoverFlight) {
-      widget.activity._markCoverHoldReached();
-    }
     if (transitionAnimation == null) {
       _entranceCompleted = true;
       if (!widget.activity._hasCoverFlight) {
@@ -420,35 +366,8 @@ class _BookOpenActivityScopeState extends State<_BookOpenActivityScope> {
       }
       return;
     }
-    if (transitionAnimation.status == AnimationStatus.completed) {
-      _scheduleSettledEntranceFallback(transitionAnimation);
-    } else {
-      _sawEntranceMotion =
-          transitionAnimation.status == AnimationStatus.forward;
-    }
+    _sawEntranceMotion = transitionAnimation.status == AnimationStatus.forward;
     transitionAnimation.addStatusListener(_onTransitionStatusChanged);
-  }
-
-  void _scheduleSettledEntranceFallback(Animation<double> animation) {
-    if (_settledFallbackScheduled) return;
-    _settledFallbackScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _settledFallbackScheduled = false;
-      if (!mounted ||
-          !identical(widget.transitionAnimation, animation) ||
-          animation.status != AnimationStatus.completed ||
-          _entranceCompleted) {
-        return;
-      }
-      setState(() {
-        _sawEntranceMotion = true;
-        _entranceCompleted = true;
-      });
-      if (!widget.activity._hasCoverFlight) {
-        widget.activity._markFlightSettled();
-        widget.activity._markCoverHoldReached();
-      }
-    });
   }
 
   void _onTransitionStatusChanged(AnimationStatus status) {
@@ -483,7 +402,10 @@ class _BookOpenActivityScopeState extends State<_BookOpenActivityScope> {
     final transitionAnimation = widget.transitionAnimation;
     if (transitionAnimation == null) return widget.child;
     return AnimatedBuilder(
-      animation: _scopeAnimation!,
+      animation: Listenable.merge([
+        transitionAnimation,
+        widget.activity._flightSettled,
+      ]),
       child: widget.child,
       builder: (context, child) {
         final isExiting =
@@ -498,115 +420,21 @@ class _BookOpenActivityScopeState extends State<_BookOpenActivityScope> {
         return _BookOpenTransitionScope(
           activity: widget.activity,
           child: ReaderTransitionWorkScope(
-            key: const ValueKey('book-open-transition-reader-work-mode'),
             enabled: workEnabled,
-            // Expensive reader work still obeys ReaderTransitionWorkScope,
-            // but the full reader ticker tree must remain alive. Pausing it
-            // also freezes the chrome animation and can make a slow opening
-            // look impossible to exit.
-            child: ExcludeSemantics(
-              excluding: !widget.activity._flightSettled.value,
-              child: child!,
+            child: TickerMode(
+              key: const ValueKey('book-open-transition-reader-work-mode'),
+              enabled: workEnabled,
+              // 渐显期间透明度每帧变化会反复触发整页语义树重建（实测
+              // 单帧最高约 9ms，足以击穿 120Hz 帧预算）；飞行落定前语义
+              // 树对读屏也无意义，排除到动画结束后一次性构建。
+              child: ExcludeSemantics(
+                excluding: !widget.activity._flightSettled.value,
+                child: child!,
+              ),
             ),
           ),
         );
       },
-    );
-  }
-}
-
-/// Keeps the reader surface opaque from the first route frame, then fades the
-/// live reader content only after that content has completed its first paint.
-/// This separate timeline prevents late pagination from bypassing the route
-/// fade and making all text appear in a single frame.
-class _BookReadyContentFade extends StatefulWidget {
-  const _BookReadyContentFade({
-    required this.activity,
-    required this.animationPace,
-    required this.child,
-  });
-
-  final BookOpenTransitionActivity activity;
-  final LibraryBookOpenAnimationPace animationPace;
-  final Widget child;
-
-  @override
-  State<_BookReadyContentFade> createState() => _BookReadyContentFadeState();
-}
-
-class _BookReadyContentFadeState extends State<_BookReadyContentFade>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late bool _contentReady;
-
-  Duration get _duration => switch (widget.animationPace) {
-    LibraryBookOpenAnimationPace.fast => const Duration(milliseconds: 240),
-    LibraryBookOpenAnimationPace.elegant => const Duration(milliseconds: 720),
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _contentReady =
-        widget.activity._openingPhase.value == _BookOpeningPhase.content;
-    _controller = AnimationController(
-      vsync: this,
-      duration: _duration,
-      value: _contentReady ? 1 : 0,
-    );
-    widget.activity._openingPhase.addListener(_handleOpeningPhaseChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant _BookReadyContentFade oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.activity, widget.activity)) {
-      oldWidget.activity._openingPhase.removeListener(
-        _handleOpeningPhaseChanged,
-      );
-      widget.activity._openingPhase.addListener(_handleOpeningPhaseChanged);
-      _contentReady =
-          widget.activity._openingPhase.value == _BookOpeningPhase.content;
-      _controller.value = _contentReady ? 1 : 0;
-    }
-    if (oldWidget.animationPace != widget.animationPace) {
-      _controller.duration = _duration;
-    }
-    _handleOpeningPhaseChanged();
-  }
-
-  void _handleOpeningPhaseChanged() {
-    if (_contentReady ||
-        widget.activity._openingPhase.value != _BookOpeningPhase.content) {
-      return;
-    }
-    _contentReady = true;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduceMotion) {
-      _controller.value = 1;
-      return;
-    }
-    _controller.duration = _duration;
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    widget.activity._openingPhase.removeListener(_handleOpeningPhaseChanged);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final curve = widget.animationPace == LibraryBookOpenAnimationPace.elegant
-        ? Curves.easeInOutSine
-        : Curves.easeOutCubic;
-    return FadeTransition(
-      key: const ValueKey('book-ready-transition-content-opacity'),
-      opacity: CurvedAnimation(parent: _controller, curve: curve),
-      child: widget.child,
     );
   }
 }
@@ -705,7 +533,6 @@ class _BookOpenFlight extends StatefulWidget {
     required this.animation,
     required this.data,
     required this.activity,
-    required this.animationPace,
     required this.readerBackgroundColor,
     required this.predictiveBackInProgress,
     required this.child,
@@ -714,7 +541,6 @@ class _BookOpenFlight extends StatefulWidget {
   final Animation<double> animation;
   final BookOpenAnimation data;
   final BookOpenTransitionActivity activity;
-  final LibraryBookOpenAnimationPace animationPace;
   final Color? readerBackgroundColor;
   final ValueGetter<bool> predictiveBackInProgress;
   final Widget child;
@@ -755,25 +581,18 @@ class _BookOpenFlightState extends State<_BookOpenFlight>
   Widget get child => widget.child;
 
   late final AnimationController _openingRevealController;
-  late Listenable _visualAnimation;
   final SnapshotController _exitSnapshotController = SnapshotController();
-
-  Duration get _openingRevealDuration =>
-      widget.animationPace == LibraryBookOpenAnimationPace.elegant
-      ? const Duration(milliseconds: 720)
-      : const Duration(milliseconds: 360);
 
   @override
   void initState() {
     super.initState();
     _openingRevealController = AnimationController(
       vsync: this,
-      duration: _openingRevealDuration,
+      duration: const Duration(milliseconds: 380),
       value: widget.activity._openingPhase.value == _BookOpeningPhase.waiting
           ? 0
           : 1,
     );
-    _refreshVisualAnimation();
     _openingRevealController.addStatusListener(_onOpeningRevealStatusChanged);
     widget.activity._openingPhase.addListener(_onOpeningPhaseChanged);
     widget.animation
@@ -789,9 +608,6 @@ class _BookOpenFlightState extends State<_BookOpenFlight>
   @override
   void didUpdateWidget(covariant _BookOpenFlight oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.animationPace != widget.animationPace) {
-      _openingRevealController.duration = _openingRevealDuration;
-    }
     if (!identical(oldWidget.animation, widget.animation)) {
       oldWidget.animation
         ..removeListener(_syncExitSnapshotState)
@@ -799,7 +615,6 @@ class _BookOpenFlightState extends State<_BookOpenFlight>
       widget.animation
         ..addListener(_syncExitSnapshotState)
         ..addStatusListener(_onRouteAnimationStatusChanged);
-      _refreshVisualAnimation();
       _syncExitSnapshotState();
       _maybeMarkFlightSettled();
     }
@@ -811,13 +626,6 @@ class _BookOpenFlightState extends State<_BookOpenFlight>
         ? 0
         : 1;
     _maybeMarkFlightSettled();
-  }
-
-  void _refreshVisualAnimation() {
-    _visualAnimation = Listenable.merge([
-      widget.animation,
-      _openingRevealController,
-    ]);
   }
 
   void _onOpeningPhaseChanged() {
@@ -903,7 +711,7 @@ class _BookOpenFlightState extends State<_BookOpenFlight>
     );
     final cover = data.coverBuilder(context);
     return AnimatedBuilder(
-      animation: _visualAnimation,
+      animation: Listenable.merge([animation, _openingRevealController]),
       builder: (context, _) {
         final routeT = animation.value;
         final screenSize = MediaQuery.sizeOf(context);

@@ -6,7 +6,12 @@ import 'dart:typed_data';
 import 'package:xxread/models/book.dart';
 
 enum BookImportSourceKind {
-  filePicker('file_picker');
+  filePicker('file_picker'),
+  androidTree('android_tree'),
+  iosSharedDocuments('ios_shared_documents'),
+  iosICloud('ios_icloud'),
+  systemOpen('system_open'),
+  systemShare('system_share');
 
   const BookImportSourceKind(this.storageValue);
 
@@ -136,6 +141,11 @@ class BookInsertDecision {
 abstract interface class BookImportStore {
   Future<Book?> getBookByHash(String contentHash);
 
+  Future<Book?> getBookBySourceLocator({
+    required String sourceKind,
+    required String sourceLocator,
+  });
+
   Future<Book?> getBookByFilePath(String filePath);
 
   Future<BookInsertDecision> insertIfAbsentByHash(Book book);
@@ -143,5 +153,8 @@ abstract interface class BookImportStore {
   Future<Book> updateBookStorageLocation({
     required Book book,
     required String filePath,
+    required String sourceKind,
+    required String sourceLocator,
+    required int? sourceModifiedTime,
   });
 }

@@ -1,41 +1,12 @@
-import 'dart:async';
-
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../core/reader/reader_layout.dart';
-import '../core/reader/reader_auto_page_turn_controller.dart';
 import '../core/reader/reader_margin_settings.dart';
 import '../core/reader/reader_settings.dart';
 import '../core/reader/reader_custom_theme.dart';
 import '../core/reader/reader_system_ui.dart';
 import '../utils/reader_themes.dart';
-import '../utils/localization_extension.dart';
 import 'reader_theme_background.dart';
-import 'reader_chapter_progress_setting_tile.dart';
-
-@immutable
-class ReaderFontChoice {
-  const ReaderFontChoice({
-    required this.valueLabel,
-    required this.hint,
-    required this.family,
-    required this.fallbackFamilies,
-    required this.supportsVariableWeight,
-    required this.fontWeightHint,
-    this.variableWeightMin,
-    this.variableWeightMax,
-  });
-
-  final String valueLabel;
-  final String hint;
-  final String? family;
-  final List<String> fallbackFamilies;
-  final bool supportsVariableWeight;
-  final String fontWeightHint;
-  final int? variableWeightMin;
-  final int? variableWeightMax;
-}
 
 class ReaderSettingsSheet extends StatefulWidget {
   const ReaderSettingsSheet({
@@ -51,8 +22,6 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.pageModeSummary,
     required this.topBarStyleTitle,
     required this.topBarStyleSummary,
-    this.chapterProgressStyle = ReaderChapterProgressStyle.hidden,
-    this.onChapterProgressStyleChanged,
     required this.pullBookmarkTitle,
     required this.pullBookmarkHint,
     required this.tapPageAnimationTitle,
@@ -62,18 +31,7 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.showTabletTwoPageToggle,
     required this.tabletTwoPageTitle,
     required this.tabletTwoPageHint,
-    required this.fontFamilyLabel,
-    required this.fontFamilyValueLabel,
-    required this.fontFamilyHint,
-    required this.onFontFamilyTap,
     required this.fontSizeLabel,
-    required this.textBrightnessLabel,
-    required this.dimTextInDarkModeTitle,
-    required this.dimTextInDarkModeHint,
-    required this.fontWeightLabel,
-    required this.fontWeightValueLabels,
-    required this.fontWeightHint,
-    required this.fontWeightPreviewText,
     required this.lineHeightLabel,
     required this.letterSpacingLabel,
     required this.textAlignmentLabel,
@@ -84,19 +42,10 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.horizontalMarginLabel,
     required this.topMarginLabel,
     required this.bottomMarginLabel,
-    required this.chapterTitlePageTitle,
-    required this.chapterTitlePageHint,
-    this.showChapterTitlePageToggle = true,
+    this.txtChapterTitlePageTitle,
+    this.txtChapterTitlePageHint,
     required this.themeId,
     required this.fontSize,
-    required this.textBrightness,
-    required this.dimTextInDarkMode,
-    required this.fontWeight,
-    this.fontFamily,
-    this.fontFamilyFallback = const <String>[],
-    this.fontWeightSupportsVariable = false,
-    this.fontWeightVariableMin,
-    this.fontWeightVariableMax,
     required this.lineHeight,
     required this.letterSpacing,
     required this.textAlignment,
@@ -108,20 +57,14 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.pullBookmarkEnabled,
     required this.tapPageAnimationEnabled,
     required this.tabletTwoPageEnabled,
-    required this.chapterTitlePageEnabled,
+    this.txtChapterTitlePageEnabled,
     required this.themeLabelFor,
     required this.onThemeChanged,
     required this.onCustomThemeTap,
     required this.onPageModeTap,
-    this.autoPageTurnController,
-    this.autoPageTurnIsVertical = false,
-    this.onAutoPageTurnSettings,
     required this.onTopBarStyleTap,
     required this.onTapZonesTap,
     required this.onFontSizeChanged,
-    required this.onTextBrightnessChanged,
-    required this.onDimTextInDarkModeChanged,
-    required this.onFontWeightChanged,
     required this.onLineHeightChanged,
     required this.onLetterSpacingChanged,
     required this.onTextAlignmentChanged,
@@ -133,7 +76,7 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.onPullBookmarkChanged,
     required this.onTapPageAnimationChanged,
     required this.onTabletTwoPageChanged,
-    required this.onChapterTitlePageChanged,
+    this.onTxtChapterTitlePageChanged,
   });
 
   final String title;
@@ -147,8 +90,6 @@ class ReaderSettingsSheet extends StatefulWidget {
   final String pageModeSummary;
   final String topBarStyleTitle;
   final String topBarStyleSummary;
-  final ReaderChapterProgressStyle chapterProgressStyle;
-  final ValueChanged<ReaderChapterProgressStyle>? onChapterProgressStyleChanged;
   final String pullBookmarkTitle;
   final String pullBookmarkHint;
   final String tapPageAnimationTitle;
@@ -158,18 +99,7 @@ class ReaderSettingsSheet extends StatefulWidget {
   final bool showTabletTwoPageToggle;
   final String tabletTwoPageTitle;
   final String tabletTwoPageHint;
-  final String fontFamilyLabel;
-  final String fontFamilyValueLabel;
-  final String fontFamilyHint;
-  final Future<ReaderFontChoice?> Function() onFontFamilyTap;
   final String fontSizeLabel;
-  final String textBrightnessLabel;
-  final String dimTextInDarkModeTitle;
-  final String dimTextInDarkModeHint;
-  final String fontWeightLabel;
-  final List<String> fontWeightValueLabels;
-  final String fontWeightHint;
-  final String fontWeightPreviewText;
   final String lineHeightLabel;
   final String letterSpacingLabel;
   final String textAlignmentLabel;
@@ -180,19 +110,10 @@ class ReaderSettingsSheet extends StatefulWidget {
   final String horizontalMarginLabel;
   final String topMarginLabel;
   final String bottomMarginLabel;
-  final String chapterTitlePageTitle;
-  final String chapterTitlePageHint;
-  final bool showChapterTitlePageToggle;
+  final String? txtChapterTitlePageTitle;
+  final String? txtChapterTitlePageHint;
   final String themeId;
   final double fontSize;
-  final int textBrightness;
-  final bool dimTextInDarkMode;
-  final int fontWeight;
-  final String? fontFamily;
-  final List<String> fontFamilyFallback;
-  final bool fontWeightSupportsVariable;
-  final int? fontWeightVariableMin;
-  final int? fontWeightVariableMax;
   final double lineHeight;
   final double letterSpacing;
   final ReaderTextAlignment textAlignment;
@@ -204,20 +125,14 @@ class ReaderSettingsSheet extends StatefulWidget {
   final bool pullBookmarkEnabled;
   final bool tapPageAnimationEnabled;
   final bool tabletTwoPageEnabled;
-  final bool chapterTitlePageEnabled;
+  final bool? txtChapterTitlePageEnabled;
   final String Function(String themeId) themeLabelFor;
   final ValueChanged<String> onThemeChanged;
   final VoidCallback onCustomThemeTap;
   final VoidCallback onPageModeTap;
-  final ReaderAutoPageTurnController? autoPageTurnController;
-  final bool autoPageTurnIsVertical;
-  final VoidCallback? onAutoPageTurnSettings;
   final VoidCallback onTopBarStyleTap;
   final VoidCallback onTapZonesTap;
   final ValueChanged<double> onFontSizeChanged;
-  final ValueChanged<int> onTextBrightnessChanged;
-  final ValueChanged<bool> onDimTextInDarkModeChanged;
-  final ValueChanged<int> onFontWeightChanged;
   final ValueChanged<double> onLineHeightChanged;
   final ValueChanged<double> onLetterSpacingChanged;
   final ValueChanged<ReaderTextAlignment> onTextAlignmentChanged;
@@ -229,7 +144,7 @@ class ReaderSettingsSheet extends StatefulWidget {
   final ValueChanged<bool> onPullBookmarkChanged;
   final ValueChanged<bool> onTapPageAnimationChanged;
   final ValueChanged<bool> onTabletTwoPageChanged;
-  final ValueChanged<bool> onChapterTitlePageChanged;
+  final ValueChanged<bool>? onTxtChapterTitlePageChanged;
 
   @override
   State<ReaderSettingsSheet> createState() => _ReaderSettingsSheetState();
@@ -237,20 +152,7 @@ class ReaderSettingsSheet extends StatefulWidget {
 
 class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
   late String _themeId = widget.themeId;
-  late ReaderChapterProgressStyle _chapterProgressStyle =
-      widget.chapterProgressStyle;
   late double _fontSize = widget.fontSize;
-  late int _textBrightness = widget.textBrightness;
-  late bool _dimTextInDarkMode = widget.dimTextInDarkMode;
-  late int _fontWeight = normalizeReaderFontWeight(widget.fontWeight);
-  late String _fontFamilyValueLabel = widget.fontFamilyValueLabel;
-  late String _fontFamilyHint = widget.fontFamilyHint;
-  late String? _fontFamily = widget.fontFamily;
-  late List<String> _fontFamilyFallback = widget.fontFamilyFallback;
-  late bool _fontWeightSupportsVariable = widget.fontWeightSupportsVariable;
-  late int? _fontWeightVariableMin = widget.fontWeightVariableMin;
-  late int? _fontWeightVariableMax = widget.fontWeightVariableMax;
-  late String _fontWeightHint = widget.fontWeightHint;
   late double _lineHeight = widget.lineHeight;
   late double _letterSpacing = widget.letterSpacing;
   late ReaderTextAlignment _textAlignment = widget.textAlignment;
@@ -262,9 +164,8 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
   late bool _pullBookmarkEnabled = widget.pullBookmarkEnabled;
   late bool _tapPageAnimationEnabled = widget.tapPageAnimationEnabled;
   late bool _tabletTwoPageEnabled = widget.tabletTwoPageEnabled;
-  late bool _chapterTitlePageEnabled = widget.chapterTitlePageEnabled;
+  late bool? _txtChapterTitlePageEnabled = widget.txtChapterTitlePageEnabled;
   _ReaderSettingsTab _tab = _ReaderSettingsTab.theme;
-  int _tabDirection = 1;
 
   @override
   Widget build(BuildContext context) {
@@ -304,149 +205,39 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
               ),
             ],
             selected: {_tab},
-            onSelectionChanged: (selection) {
-              final nextTab = selection.first;
-              if (nextTab == _tab) return;
-              setState(() {
-                _tabDirection = nextTab.index > _tab.index ? 1 : -1;
-                _tab = nextTab;
-              });
-            },
+            onSelectionChanged: (selection) =>
+                setState(() => _tab = selection.first),
           ),
           const SizedBox(height: 16),
-          _buildAnimatedTabContent(context, theme),
+          ...switch (_tab) {
+            _ReaderSettingsTab.theme => _themeTabChildren(theme),
+            _ReaderSettingsTab.text => _textTabChildren(context),
+            _ReaderSettingsTab.layout => _layoutTabChildren(),
+            _ReaderSettingsTab.paging => _pagingTabChildren(),
+          },
         ],
       ),
     );
   }
 
-  Widget _buildAnimatedTabContent(BuildContext context, ThemeData theme) {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    final duration = reduceMotion
-        ? Duration.zero
-        : const Duration(milliseconds: 300);
-    final children = switch (_tab) {
-      _ReaderSettingsTab.theme => _themeTabChildren(theme),
-      _ReaderSettingsTab.text => _textTabChildren(context),
-      _ReaderSettingsTab.layout => _layoutTabChildren(),
-      _ReaderSettingsTab.paging => _pagingTabChildren(),
-    };
-    return AnimatedSize(
-      key: const ValueKey('reader-settings-tab-animated-size'),
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      clipBehavior: Clip.hardEdge,
-      child: AnimatedSwitcher(
-        key: const ValueKey('reader-settings-tab-switcher'),
-        duration: duration,
-        reverseDuration: duration,
-        layoutBuilder: _readerSettingsTabLayout,
-        transitionBuilder: (child, animation) {
-          final childTab = (child.key! as ValueKey<_ReaderSettingsTab>).value;
-          final incoming = childTab == _tab;
-          final direction = incoming ? _tabDirection : -_tabDirection;
-          return _ReaderSettingsTabTransition(
-            animation: animation,
-            interactiveWhenCompleted: incoming,
-            horizontalOffset: direction * (incoming ? 0.045 : 0.025),
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey<_ReaderSettingsTab>(_tab),
-          child: Column(
-            key: ValueKey('reader-settings-tab-content-${_tab.name}'),
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: children,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _changeFontFamily() async {
-    final choice = await widget.onFontFamilyTap();
-    if (!mounted || choice == null) return;
-    setState(() {
-      _fontFamilyValueLabel = choice.valueLabel;
-      _fontFamilyHint = choice.hint;
-      _fontFamily = choice.family;
-      _fontFamilyFallback = choice.fallbackFamilies;
-      _fontWeightSupportsVariable = choice.supportsVariableWeight;
-      _fontWeightVariableMin = choice.variableWeightMin;
-      _fontWeightVariableMax = choice.variableWeightMax;
-      _fontWeightHint = choice.fontWeightHint;
-    });
-  }
-
   List<Widget> _textTabChildren(BuildContext context) => [
-    ReaderFontFamilyControl(
-      label: widget.fontFamilyLabel,
-      valueLabel: _fontFamilyValueLabel,
-      hint: _fontFamilyHint,
-      fontFamily: _fontFamily,
-      fontFamilyFallback: _fontFamilyFallback,
-      onTap: () => unawaited(_changeFontFamily()),
-    ),
     ReaderSettingSlider(
-      key: const ValueKey('reader-font-size-slider'),
       label: widget.fontSizeLabel,
       value: _fontSize,
       valueLabel: _fontSize.round().toString(),
-      min: ReaderSettings.minFontSize,
-      max: ReaderSettings.maxFontSize,
-      divisions: (ReaderSettings.maxFontSize - ReaderSettings.minFontSize)
-          .round(),
+      min: 14,
+      max: 32,
+      divisions: 18,
       onChanged: (value) => setState(() => _fontSize = value),
       onChangeEnd: widget.onFontSizeChanged,
     ),
     ReaderSettingSlider(
-      key: const ValueKey('reader-text-brightness-slider'),
-      label: widget.textBrightnessLabel,
-      value: _textBrightness.toDouble(),
-      valueLabel: _textBrightness.toString(),
-      min: ReaderSettings.minTextBrightness.toDouble(),
-      max: ReaderSettings.maxTextBrightness.toDouble(),
-      divisions: ReaderSettings.maxTextBrightness,
-      onChanged: (value) => setState(() => _textBrightness = value.round()),
-      onChangeEnd: (value) => widget.onTextBrightnessChanged(value.round()),
-    ),
-    SwitchListTile.adaptive(
-      contentPadding: const EdgeInsets.only(bottom: 10),
-      title: Text(widget.dimTextInDarkModeTitle),
-      subtitle: Text(widget.dimTextInDarkModeHint),
-      value: _dimTextInDarkMode,
-      onChanged: (value) {
-        setState(() => _dimTextInDarkMode = value);
-        widget.onDimTextInDarkModeChanged(value);
-      },
-    ),
-    ReaderFontWeightControl(
-      label: widget.fontWeightLabel,
-      valueLabels: widget.fontWeightValueLabels,
-      hint: _fontWeightHint,
-      previewText: widget.fontWeightPreviewText,
-      fontFamily: _fontFamily,
-      fontFamilyFallback: _fontFamilyFallback,
-      fontWeightSupportsVariable: _fontWeightSupportsVariable,
-      fontWeightVariableMin: _fontWeightVariableMin,
-      fontWeightVariableMax: _fontWeightVariableMax,
-      value: _fontWeight,
-      onChanged: (value) => setState(() => _fontWeight = value),
-      onChangeEnd: widget.onFontWeightChanged,
-    ),
-    ReaderSettingSlider(
-      key: const ValueKey('reader-line-height-slider'),
       label: widget.lineHeightLabel,
       value: _lineHeight,
       valueLabel: _lineHeight.toStringAsFixed(1),
-      min: ReaderSettings.minLineHeight,
-      max: ReaderSettings.maxLineHeight,
-      divisions:
-          ((ReaderSettings.maxLineHeight - ReaderSettings.minLineHeight) * 10)
-              .round(),
+      min: 1.4,
+      max: 2.1,
+      divisions: 7,
       onChanged: (value) => setState(() => _lineHeight = value),
       onChangeEnd: widget.onLineHeightChanged,
     ),
@@ -506,11 +297,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
           valueLabel: _letterSpacing.toStringAsFixed(1),
           min: ReaderSettings.minLetterSpacing,
           max: ReaderSettings.maxLetterSpacing,
-          divisions:
-              ((ReaderSettings.maxLetterSpacing -
-                          ReaderSettings.minLetterSpacing) *
-                      10)
-                  .round(),
+          divisions: 12,
           onChanged: (value) => setState(() => _letterSpacing = value),
           onChangeEnd: widget.onLetterSpacingChanged,
         ),
@@ -545,19 +332,6 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
   ];
 
   List<Widget> _layoutTabChildren() => [
-    if (widget.showChapterTitlePageToggle)
-      SwitchListTile(
-        key: const ValueKey('reader-chapter-title-page-switch'),
-        contentPadding: EdgeInsets.zero,
-        secondary: const Icon(Icons.title_rounded),
-        value: _chapterTitlePageEnabled,
-        title: Text(widget.chapterTitlePageTitle),
-        subtitle: Text(widget.chapterTitlePageHint),
-        onChanged: (value) {
-          setState(() => _chapterTitlePageEnabled = value);
-          widget.onChapterTitlePageChanged(value);
-        },
-      ),
     ReaderSettingSlider(
       key: const ValueKey('reader-horizontal-margin-slider'),
       label: widget.horizontalMarginLabel,
@@ -565,10 +339,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
       valueLabel: _horizontalMargin.round().toString(),
       min: ReaderMarginSettings.horizontalMin,
       max: ReaderMarginSettings.horizontalMax,
-      divisions:
-          (ReaderMarginSettings.horizontalMax -
-                  ReaderMarginSettings.horizontalMin)
-              .round(),
+      divisions: 48,
       onChanged: (value) => setState(() => _horizontalMargin = value),
       onChangeEnd: widget.onHorizontalMarginChanged,
     ),
@@ -582,6 +353,22 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
       onTopChangeEnd: widget.onTopMarginChanged,
       onBottomChangeEnd: widget.onBottomMarginChanged,
     ),
+    if (_txtChapterTitlePageEnabled != null &&
+        widget.txtChapterTitlePageTitle != null &&
+        widget.txtChapterTitlePageHint != null &&
+        widget.onTxtChapterTitlePageChanged != null)
+      SwitchListTile(
+        key: const ValueKey('reader-txt-chapter-title-page-switch'),
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.title_rounded),
+        value: _txtChapterTitlePageEnabled!,
+        title: Text(widget.txtChapterTitlePageTitle!),
+        subtitle: Text(widget.txtChapterTitlePageHint!),
+        onChanged: (value) {
+          setState(() => _txtChapterTitlePageEnabled = value);
+          widget.onTxtChapterTitlePageChanged!(value);
+        },
+      ),
   ];
 
   List<Widget> _themeTabChildren(ThemeData theme) => [
@@ -606,14 +393,6 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
       trailing: const Icon(Icons.chevron_right),
       onTap: widget.onTopBarStyleTap,
     ),
-    if (widget.onChapterProgressStyleChanged != null)
-      ReaderChapterProgressSettingTile(
-        style: _chapterProgressStyle,
-        onChanged: (style) {
-          setState(() => _chapterProgressStyle = style);
-          widget.onChapterProgressStyleChanged!(style);
-        },
-      ),
   ];
 
   List<Widget> _pagingTabChildren() => [
@@ -625,29 +404,6 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
       trailing: const Icon(Icons.chevron_right),
       onTap: widget.onPageModeTap,
     ),
-    if (widget.onAutoPageTurnSettings != null)
-      if (widget.autoPageTurnController case final controller?)
-        AnimatedBuilder(
-          animation: controller,
-          builder: (context, _) => _autoPageTurnTile(context, controller),
-        )
-      else
-        _autoPageTurnTile(context, null),
-    if (widget.onAutoPageTurnSettings != null)
-      if (widget.autoPageTurnController case final controller?)
-        AnimatedBuilder(
-          animation: controller,
-          builder: (context, _) => SwitchListTile(
-            key: const ValueKey('reader-auto-page-turn-shortcut-switch'),
-            contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.touch_app_rounded),
-            value: controller.shortcutVisible,
-            title: Text(context.l10n.readerAutoPageTurnShortcutTitle),
-            subtitle: Text(context.l10n.readerAutoPageTurnShortcutHint),
-            onChanged: (value) =>
-                unawaited(controller.setShortcutVisible(value)),
-          ),
-        ),
     if (widget.showTabletTwoPageToggle)
       SwitchListTile(
         key: const ValueKey('reader-tablet-two-page-switch'),
@@ -695,103 +451,9 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
       },
     ),
   ];
-
-  Widget _autoPageTurnTile(
-    BuildContext context,
-    ReaderAutoPageTurnController? controller,
-  ) => ListTile(
-    key: const ValueKey('reader-auto-page-turn-tile'),
-    contentPadding: EdgeInsets.zero,
-    leading: const Icon(Icons.av_timer_rounded),
-    title: Text(context.l10n.readerAutoPageTurnTitle),
-    subtitle: Text(
-      controller == null
-          ? context.l10n.readerAutoPageTurnOff
-          : _autoPageTurnSummary(context, controller),
-    ),
-    trailing: const Icon(Icons.chevron_right),
-    onTap: widget.onAutoPageTurnSettings,
-  );
-
-  String _autoPageTurnSummary(
-    BuildContext context,
-    ReaderAutoPageTurnController controller,
-  ) {
-    final mode = controller.modeFor(widget.autoPageTurnIsVertical);
-    final label = switch (mode) {
-      ReaderAutoPageTurnMode.timed => context.l10n.readerAutoPageTurnModeTimed,
-      ReaderAutoPageTurnMode.sweep => context.l10n.readerAutoPageTurnModeSweep,
-      ReaderAutoPageTurnMode.continuous =>
-        context.l10n.readerAutoPageTurnModeContinuous,
-      ReaderAutoPageTurnMode.interval =>
-        context.l10n.readerAutoPageTurnModeInterval,
-    };
-    return context.l10n.readerAutoPageTurnModeValue(
-      label,
-      controller.secondsFor(mode).round(),
-    );
-  }
 }
 
 enum _ReaderSettingsTab { theme, text, layout, paging }
-
-Widget _readerSettingsTabLayout(
-  Widget? currentChild,
-  List<Widget> previousChildren,
-) => Stack(
-  alignment: Alignment.topLeft,
-  clipBehavior: Clip.hardEdge,
-  children: [
-    for (final child in previousChildren)
-      Positioned(left: 0, right: 0, top: 0, child: child),
-    ?currentChild,
-  ],
-);
-
-class _ReaderSettingsTabTransition extends StatelessWidget {
-  const _ReaderSettingsTabTransition({
-    required this.animation,
-    required this.interactiveWhenCompleted,
-    required this.horizontalOffset,
-    required this.child,
-  });
-
-  final Animation<double> animation;
-  final bool interactiveWhenCompleted;
-  final double horizontalOffset;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final motion = animation.drive(CurveTween(curve: Curves.easeOutCubic));
-    final fadeCurve = interactiveWhenCompleted
-        ? const Interval(0.18, 1, curve: Curves.easeOutCubic)
-        : const Interval(0.6, 1, curve: Curves.easeOutCubic);
-    final opacity = animation.drive(CurveTween(curve: fadeCurve));
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        final transitioning =
-            !interactiveWhenCompleted ||
-            animation.status != AnimationStatus.completed;
-        return IgnorePointer(
-          ignoring: transitioning,
-          child: ExcludeSemantics(excluding: transitioning, child: child),
-        );
-      },
-      child: FadeTransition(
-        opacity: opacity,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: Offset(horizontalOffset, 0),
-            end: Offset.zero,
-          ).animate(motion),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
 
 class ReaderTopBarStyleSheet extends StatelessWidget {
   const ReaderTopBarStyleSheet({
@@ -1090,203 +752,145 @@ class ReaderSettingsDragHandle extends StatelessWidget {
   }
 }
 
-class ReaderThemeStrip extends StatefulWidget {
+class ReaderThemeStrip extends StatelessWidget {
   const ReaderThemeStrip({
     super.key,
     required this.selectedThemeId,
     required this.labelFor,
     required this.onSelected,
     required this.onCustomThemeTap,
-    this.palettes,
-    this.showCustomAction = true,
-    this.cardWidth = 108,
-    this.spacing = 10,
   });
 
   final String selectedThemeId;
   final String Function(String themeId) labelFor;
   final ValueChanged<String> onSelected;
   final VoidCallback onCustomThemeTap;
-  final List<ReaderThemePalette>? palettes;
-  final bool showCustomAction;
-  final double cardWidth;
-  final double spacing;
-
-  @override
-  State<ReaderThemeStrip> createState() => _ReaderThemeStripState();
-}
-
-class _ReaderThemeStripState extends State<ReaderThemeStrip> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent || !_scrollController.hasClients) return;
-    final delta = event.scrollDelta.dy.abs() >= event.scrollDelta.dx.abs()
-        ? event.scrollDelta.dy
-        : event.scrollDelta.dx;
-    if (delta == 0) return;
-    final position = _scrollController.position;
-    final atLeadingBoundary =
-        delta < 0 && _scrollController.offset <= position.minScrollExtent + 0.5;
-    final atTrailingBoundary =
-        delta > 0 && _scrollController.offset >= position.maxScrollExtent - 0.5;
-    if (atLeadingBoundary || atTrailingBoundary) return;
-    final nextOffset = (_scrollController.offset + delta)
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(nextOffset);
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     final customThemes = ReaderThemes.customThemes;
-    final themes = widget.palettes ?? ReaderThemes.orderedPalettes;
-    final inheritedScrollBehavior = ScrollConfiguration.of(context);
+    final themes = ReaderThemes.orderedPalettes;
     return SizedBox(
       height: 122,
-      child: Listener(
-        onPointerSignal: _handlePointerSignal,
-        child: ScrollConfiguration(
-          behavior: inheritedScrollBehavior.copyWith(
-            dragDevices: {
-              ...inheritedScrollBehavior.dragDevices,
-              PointerDeviceKind.mouse,
-            },
-          ),
-          child: ListView.separated(
-            controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            physics: const BouncingScrollPhysics(),
-            itemCount: themes.length + (widget.showCustomAction ? 1 : 0),
-            separatorBuilder: (_, _) => SizedBox(width: widget.spacing),
-            itemBuilder: (context, index) {
-              if (widget.showCustomAction && index == themes.length) {
-                final colors = Theme.of(context).colorScheme;
-                return SizedBox(
-                  width: 108,
-                  child: Semantics(
-                    button: true,
-                    label: widget.labelFor(ReaderCustomTheme.legacyThemeId),
-                    child: InkWell(
-                      key: const ValueKey('reader-custom-theme-card'),
-                      onTap: widget.onCustomThemeTap,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 1),
+        physics: const BouncingScrollPhysics(),
+        itemCount: themes.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          if (index == themes.length) {
+            final colors = Theme.of(context).colorScheme;
+            return SizedBox(
+              width: 108,
+              child: Semantics(
+                button: true,
+                label: labelFor(ReaderCustomTheme.legacyThemeId),
+                child: InkWell(
+                  key: const ValueKey('reader-custom-theme-card'),
+                  onTap: onCustomThemeTap,
+                  borderRadius: BorderRadius.circular(18),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
                       borderRadius: BorderRadius.circular(18),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: colors.surface,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: colors.outlineVariant,
-                            width: 1.2,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 30,
-                                  height: 30,
-                                  decoration: BoxDecoration(
-                                    color: colors.surfaceContainerHighest,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: colors.outlineVariant,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.add_rounded,
-                                    size: 20,
-                                    color: colors.onSurface,
-                                  ),
-                                ),
-                                const Spacer(),
-                                if (customThemes.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(99),
-                                    ),
-                                    child: Text(
-                                      '${customThemes.length}',
-                                      style: TextStyle(
-                                        color: colors.onPrimaryContainer,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const Spacer(),
-                            Text(
-                              customThemes.isEmpty ? 'Aa +' : 'Aa ···',
-                              style: TextStyle(
-                                color: colors.onSurface,
-                                fontSize: 19,
-                                height: 1,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 7),
-                            Text(
-                              widget.labelFor(ReaderCustomTheme.legacyThemeId),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.onSurface,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
+                      border: Border.all(
+                        color: colors.outlineVariant,
+                        width: 1.2,
                       ),
                     ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: colors.surfaceContainerHighest,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colors.outlineVariant,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.add_rounded,
+                                size: 20,
+                                color: colors.onSurface,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (customThemes.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.primaryContainer,
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                child: Text(
+                                  '${customThemes.length}',
+                                  style: TextStyle(
+                                    color: colors.onPrimaryContainer,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          customThemes.isEmpty ? 'Aa +' : 'Aa ···',
+                          style: TextStyle(
+                            color: colors.onSurface,
+                            fontSize: 19,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          labelFor(ReaderCustomTheme.legacyThemeId),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.onSurface,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              }
-              final palette = themes[index];
-              final customTheme = ReaderThemes.customThemeById(palette.id);
-              final selected = palette.id == widget.selectedThemeId;
-              final label =
-                  customTheme == null || customTheme.name.trim().isEmpty
-                  ? widget.labelFor(palette.id)
-                  : customTheme.name.trim();
-              return _ReaderThemeCard(
-                key: ValueKey('reader-theme-${palette.id}'),
-                width: widget.cardWidth,
-                palette: palette,
-                label: label,
-                selected: selected,
-                icon: customTheme == null
-                    ? _iconFor(palette.id)
-                    : customTheme.hasBackgroundImage
-                    ? Icons.image_rounded
-                    : Icons.palette_rounded,
-                onTap: () => widget.onSelected(palette.id),
-              );
-            },
-          ),
-        ),
+                ),
+              ),
+            );
+          }
+          final palette = themes[index];
+          final customTheme = ReaderThemes.customThemeById(palette.id);
+          final selected = palette.id == selectedThemeId;
+          final label = customTheme == null || customTheme.name.trim().isEmpty
+              ? labelFor(palette.id)
+              : customTheme.name.trim();
+          return _ReaderThemeCard(
+            key: ValueKey('reader-theme-${palette.id}'),
+            palette: palette,
+            label: label,
+            selected: selected,
+            icon: customTheme == null
+                ? _iconFor(palette.id)
+                : customTheme.hasBackgroundImage
+                ? Icons.image_rounded
+                : Icons.palette_rounded,
+            onTap: () => onSelected(palette.id),
+          );
+        },
       ),
     );
   }
@@ -1307,7 +911,6 @@ class _ReaderThemeStripState extends State<ReaderThemeStrip> {
 class _ReaderThemeCard extends StatelessWidget {
   const _ReaderThemeCard({
     super.key,
-    this.width = 108,
     required this.palette,
     required this.label,
     required this.selected,
@@ -1315,7 +918,6 @@ class _ReaderThemeCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final double width;
   final ReaderThemePalette palette;
   final String label;
   final bool selected;
@@ -1326,7 +928,7 @@ class _ReaderThemeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardRadius = BorderRadius.circular(18);
     return SizedBox(
-      width: width,
+      width: 108,
       child: Semantics(
         button: true,
         selected: selected,
@@ -1416,292 +1018,6 @@ class _ReaderThemeCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class ReaderFontFamilyControl extends StatelessWidget {
-  const ReaderFontFamilyControl({
-    super.key,
-    required this.label,
-    required this.valueLabel,
-    required this.hint,
-    required this.onTap,
-    this.fontFamily,
-    this.fontFamilyFallback = const <String>[],
-  });
-
-  final String label;
-  final String valueLabel;
-  final String hint;
-  final VoidCallback onTap;
-  final String? fontFamily;
-  final List<String> fontFamilyFallback;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: const ValueKey('reader-font-choice-tile'),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Ink(
-            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest.withValues(alpha: 0.52),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: colors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: colors.outlineVariant.withValues(alpha: 0.8),
-                    ),
-                  ),
-                  child: Text(
-                    'Aa',
-                    style: TextStyle(
-                      inherit: false,
-                      fontFamily: fontFamily,
-                      fontFamilyFallback: fontFamilyFallback.isEmpty
-                          ? null
-                          : fontFamilyFallback,
-                      color: colors.onSurface,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: colors.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        valueLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          inherit: false,
-                          fontFamily: fontFamily,
-                          fontFamilyFallback: fontFamilyFallback.isEmpty
-                              ? null
-                              : fontFamilyFallback,
-                          color: colors.onSurface,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        hint,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: colors.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ReaderFontWeightControl extends StatelessWidget {
-  const ReaderFontWeightControl({
-    super.key,
-    required this.label,
-    required this.valueLabels,
-    required this.hint,
-    required this.previewText,
-    required this.value,
-    required this.onChanged,
-    required this.onChangeEnd,
-    this.fontFamily,
-    this.fontFamilyFallback = const <String>[],
-    this.fontWeightSupportsVariable = false,
-    this.fontWeightVariableMin,
-    this.fontWeightVariableMax,
-  }) : assert(valueLabels.length == 5);
-
-  final String label;
-  final List<String> valueLabels;
-  final String hint;
-  final String previewText;
-  final int value;
-  final ValueChanged<int> onChanged;
-  final ValueChanged<int> onChangeEnd;
-  final String? fontFamily;
-  final List<String> fontFamilyFallback;
-  final bool fontWeightSupportsVariable;
-  final int? fontWeightVariableMin;
-  final int? fontWeightVariableMax;
-
-  int get _normalizedValue => normalizeReaderFontWeight(value);
-
-  String get _valueLabel {
-    final index = (_normalizedValue - ReaderSettings.minFontWeight) ~/ 100;
-    return '${valueLabels[index]} · $_normalizedValue';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final previewStyle = TextStyle(
-      inherit: false,
-      fontFamily: fontFamily,
-      fontFamilyFallback: fontFamilyFallback.isEmpty
-          ? null
-          : fontFamilyFallback,
-      color: colors.onSurface,
-      fontSize: 18,
-      height: 1.3,
-      fontWeight: readerFontWeightFromValue(_normalizedValue),
-      fontVariations: readerFontVariationsFromValue(
-        _normalizedValue,
-        supportsVariableWeight: fontWeightSupportsVariable,
-        variableWeightMin: fontWeightVariableMin,
-        variableWeightMax: fontWeightVariableMax,
-      ),
-    );
-    return Padding(
-      key: const ValueKey('reader-font-weight-control'),
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              Container(
-                constraints: const BoxConstraints(minWidth: 86),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  _valueLabel,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colors.onPrimaryContainer,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest.withValues(alpha: 0.52),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: colors.outlineVariant),
-            ),
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOutCubic,
-              style: previewStyle,
-              child: Text(
-                previewText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          SliderTheme(
-            data: Theme.of(context).sliderTheme.copyWith(
-              trackHeight: 4,
-              activeTrackColor: colors.primary,
-              inactiveTrackColor: colors.outlineVariant,
-              thumbColor: colors.primary,
-              overlayColor: colors.primary.withValues(alpha: 0.12),
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
-              showValueIndicator: ShowValueIndicator.never,
-            ),
-            child: Slider(
-              key: const ValueKey('reader-font-weight-slider'),
-              value: _normalizedValue.toDouble(),
-              min: ReaderSettings.minFontWeight.toDouble(),
-              max: ReaderSettings.maxFontWeight.toDouble(),
-              divisions:
-                  (ReaderSettings.maxFontWeight -
-                      ReaderSettings.minFontWeight) ~/
-                  100,
-              semanticFormatterCallback: (_) => _valueLabel,
-              onChanged: (next) => onChanged(normalizeReaderFontWeight(next)),
-              onChangeEnd: (next) =>
-                  onChangeEnd(normalizeReaderFontWeight(next)),
-            ),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                size: 15,
-                color: colors.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  hint,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1825,10 +1141,9 @@ class ReaderMarginControls extends StatelessWidget {
         label: topLabel,
         value: topMargin,
         valueLabel: topMargin.round().toString(),
-        min: ReaderMarginSettings.min,
-        max: ReaderMarginSettings.max,
-        divisions: (ReaderMarginSettings.max - ReaderMarginSettings.min)
-            .round(),
+        min: 0,
+        max: 40,
+        divisions: 40,
         onChanged: onTopChanged,
         onChangeEnd: onTopChangeEnd,
       ),
@@ -1837,10 +1152,9 @@ class ReaderMarginControls extends StatelessWidget {
         label: bottomLabel,
         value: bottomMargin,
         valueLabel: bottomMargin.round().toString(),
-        min: ReaderMarginSettings.min,
-        max: ReaderMarginSettings.max,
-        divisions: (ReaderMarginSettings.max - ReaderMarginSettings.min)
-            .round(),
+        min: 0,
+        max: 40,
+        divisions: 40,
         onChanged: onBottomChanged,
         onChangeEnd: onBottomChangeEnd,
       ),

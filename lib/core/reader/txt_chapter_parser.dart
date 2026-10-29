@@ -88,23 +88,6 @@ List<TxtChapterSection> parseTxtChapterSections(
   return chapters;
 }
 
-/// Parses TXT headings and bounds every resulting body section so reader
-/// pagination never has to lay out an entire heading-less book in one frame.
-List<TxtChapterSection> parseBoundedTxtChapterSections(
-  String text, {
-  required String fallbackTitle,
-  required String prefaceTitle,
-  int maxCharsPerSection = 32 * 1024,
-}) => splitOversizedTxtSections(
-  text,
-  parseTxtChapterSections(
-    text,
-    fallbackTitle: fallbackTitle,
-    prefaceTitle: prefaceTitle,
-  ),
-  maxCharsPerSection: maxCharsPerSection,
-);
-
 /// Breaks every oversized TXT chapter into bounded lazy-load sections.
 ///
 /// Without this guard, either a heading-less 70 MB document or one unusually
@@ -171,15 +154,20 @@ int _nearbyLineBoundary(
 }
 
 List<_TxtChapterMatch> _findTxtChapterMatches(String text) {
+  final heading = RegExp(
+    r'^(?:第[0-9零〇一二三四五六七八九十百千万两]+[章节卷部篇回]|chapter\s+\d+|part\s+\d+|序章|序言|前言|引言|楔子|后记|尾声|番外)(?:[\s　:：.-]+.*)?$',
+    caseSensitive: false,
+  );
   final matches = <_TxtChapterMatch>[];
   var offset = 0;
   while (offset < text.length) {
     final lineBreak = _findLineBreak(text, offset);
     final lineEnd = lineBreak < 0 ? text.length : lineBreak;
-    final normalizedTitle = normalizedTxtChapterHeading(
-      text.substring(offset, lineEnd),
-    );
-    if (normalizedTitle != null) {
+    final title = text.substring(offset, lineEnd).trim();
+    final normalizedTitle = title
+        .replaceFirst(RegExp(r'^#{1,6}\s*'), '')
+        .trim();
+    if (normalizedTitle.length <= 80 && heading.hasMatch(normalizedTitle)) {
       matches.add(
         _TxtChapterMatch(
           headingStart: offset,
@@ -196,19 +184,6 @@ List<_TxtChapterMatch> _findTxtChapterMatches(String text) {
   }
   return matches;
 }
-
-String? normalizedTxtChapterHeading(String line) {
-  final normalized = line.trim().replaceFirst(RegExp(r'^#{1,6}\s*'), '').trim();
-  if (normalized.length > 80 || !_txtChapterHeading.hasMatch(normalized)) {
-    return null;
-  }
-  return normalized;
-}
-
-final RegExp _txtChapterHeading = RegExp(
-  r'^(?:第[0-9零〇一二三四五六七八九十百千万两]+[章节卷部篇回]|chapter\s+\d+|part\s+\d+|序章|序言|前言|引言|楔子|后记|尾声|番外)(?:[\s　:：.-]+.*)?$',
-  caseSensitive: false,
-);
 
 int _skipEmptyLines(String text, int start, int end) {
   var cursor = start;

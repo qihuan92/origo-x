@@ -12,8 +12,6 @@ import 'package:xxread/core/reader/reader_text_pagination.dart';
 import 'package:xxread/models/book_note.dart';
 import 'package:xxread/utils/localization_extension.dart';
 import 'package:xxread/utils/reader_themes.dart';
-import 'package:xxread/widgets/reader_control_chrome.dart';
-import 'package:xxread/widgets/reader_chapter_title_page.dart';
 import 'package:xxread/widgets/reader_text_page_content.dart';
 
 typedef ReaderTextAnnotationSaveCallback =
@@ -22,7 +20,7 @@ typedef ReaderTextAnnotationSaveCallback =
       ReaderAnnotationEditorResult annotation,
     );
 
-/// Selectable, annotated text leaf used by the local reader.
+/// Shared selectable, annotated text leaf used by local and book-source readers.
 ///
 /// Selection offsets are captured with [SelectionListener] and translated back
 /// through [ReaderTextPage.sourceOffsetForTextOffset], keeping stored anchors
@@ -48,7 +46,7 @@ class ReaderAnnotatedTextPage extends StatefulWidget {
     this.baseSourceSpanBuilder,
     this.onAnnotationUnavailable,
     this.onInteractionChanged,
-    this.onSearchSelection,
+    this.onAskAiSelection,
     this.fillAvailableSpace = true,
   });
 
@@ -71,7 +69,7 @@ class ReaderAnnotatedTextPage extends StatefulWidget {
   final ReaderTextAnnotationSaveCallback onSaveTextAnnotation;
   final ValueChanged<bool>? onInteractionChanged;
   final Future<void> Function(ReaderSelectionSnapshot selection)?
-  onSearchSelection;
+  onAskAiSelection;
   final bool fillAvailableSpace;
 
   @override
@@ -224,9 +222,9 @@ class _ReaderAnnotatedTextPageState extends State<ReaderAnnotatedTextPage> {
     }
   }
 
-  Future<void> _searchSelection(SelectableRegionState regionState) async {
+  Future<void> _askAi(SelectableRegionState regionState) async {
     final selection = _selectionSnapshot;
-    final handler = widget.onSearchSelection;
+    final handler = widget.onAskAiSelection;
     if (selection == null || handler == null) return;
     _clearSelection(regionState);
     widget.onInteractionChanged?.call(true);
@@ -250,15 +248,15 @@ class _ReaderAnnotatedTextPageState extends State<ReaderAnnotatedTextPage> {
       onHighlight: () => unawaited(_createHighlight(regionState)),
       onNote: () => unawaited(_createNote(regionState)),
       onCopy: copyItem?.onPressed,
-      onSearch: widget.onSearchSelection == null
+      onAskAi: widget.onAskAiSelection == null
           ? null
-          : () => unawaited(_searchSelection(regionState)),
+          : () => unawaited(_askAi(regionState)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final body = SelectionArea(
+    final text = SelectionArea(
       contextMenuBuilder: _buildSelectionToolbar,
       child: SelectionListener(
         selectionNotifier: _selectionNotifier,
@@ -271,22 +269,9 @@ class _ReaderAnnotatedTextPageState extends State<ReaderAnnotatedTextPage> {
         ),
       ),
     );
-    if (widget.page.showsInlineChapterTitle) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ReaderInlineChapterTitle(
-            title: widget.chapterTitle,
-            bodyStyle: widget.bodyStyle,
-          ),
-          const SizedBox(height: ReaderInlineChapterTitle.spacingAfter),
-          if (widget.fillAvailableSpace) Expanded(child: body) else body,
-        ],
-      );
-    }
     return widget.fillAvailableSpace
-        ? Stack(fit: StackFit.expand, children: [body])
-        : body;
+        ? Stack(fit: StackFit.expand, children: [text])
+        : text;
   }
 }
 
@@ -298,7 +283,7 @@ class ReaderSelectionToolbar extends StatelessWidget {
     required this.onHighlight,
     required this.onNote,
     required this.onCopy,
-    this.onSearch,
+    this.onAskAi,
   });
 
   final ReaderThemePalette palette;
@@ -306,7 +291,7 @@ class ReaderSelectionToolbar extends StatelessWidget {
   final VoidCallback onHighlight;
   final VoidCallback onNote;
   final VoidCallback? onCopy;
-  final VoidCallback? onSearch;
+  final VoidCallback? onAskAi;
 
   @override
   Widget build(BuildContext context) {
@@ -314,13 +299,27 @@ class ReaderSelectionToolbar extends StatelessWidget {
     return TextSelectionToolbar(
       anchorAbove: anchors.primaryAnchor,
       anchorBelow: anchors.secondaryAnchor ?? anchors.primaryAnchor,
-      toolbarBuilder: (context, child) => ReaderControlBar(
-        palette: palette,
-        isTopBar: true,
-        child: Material(
-          key: const ValueKey('reader-selection-toolbar'),
-          color: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
+      toolbarBuilder: (context, child) => Material(
+        key: const ValueKey('reader-selection-toolbar'),
+        color: palette.controlBar,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: palette.border.withValues(alpha: 0.72)),
+            boxShadow: [
+              BoxShadow(
+                color: palette.shadow.withValues(
+                  alpha: palette.brightness == Brightness.dark ? 0.42 : 0.16,
+                ),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
           child: child,
         ),
       ),
@@ -337,12 +336,12 @@ class ReaderSelectionToolbar extends StatelessWidget {
           color: palette.text,
           onPressed: onNote,
         ),
-        if (onSearch != null)
+        if (onAskAi != null)
           _ReaderSelectionAction(
-            icon: Icons.search_rounded,
-            label: '搜索',
+            icon: Icons.auto_awesome_outlined,
+            label: context.l10n.readerAskAi,
             color: palette.text,
-            onPressed: onSearch,
+            onPressed: onAskAi,
           ),
         _ReaderSelectionAction(
           icon: Icons.content_copy_rounded,

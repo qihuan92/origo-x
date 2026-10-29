@@ -28,15 +28,6 @@ class ReaderPageCurlController {
       _state?._requestProgrammaticTurn(ReaderPageTurnDirection.backward) ??
       Future<void>.value();
 
-  /// Whether a fold is moving, excluding a completed turn awaiting content.
-  bool get isAnimating {
-    final state = _state;
-    return state != null &&
-        (state._forwardSpringTicker.isActive ||
-            state._backwardSpringTicker.isActive ||
-            state._catchUpTicker.isActive);
-  }
-
   @visibleForTesting
   Offset? get debugTouchPosition {
     final geometry = _state?._geometry;
@@ -78,23 +69,19 @@ class ReaderPageCurlController {
   bool get debugAnimationReady => _state?._animationReady ?? false;
 
   @visibleForTesting
-  int get debugBuildCount => _state?._buildCount ?? 0;
-
-  @visibleForTesting
-  int? get debugActiveSourceImageIdentity {
-    final image = _state?._activeSourceImage;
-    return image == null ? null : identityHashCode(image);
-  }
-
-  @visibleForTesting
   Offset? get debugShaderLineA => _state?._geometry?.lineA;
 
   @visibleForTesting
   Offset? get debugShaderLineB => _state?._geometry?.lineB;
 
   @visibleForTesting
-  bool get debugUsesProvisionalSnapshot =>
-      _state?._activeSourceUsesProvisional ?? false;
+  bool get debugUsesProvisionalSnapshot {
+    final state = _state;
+    final source = state?._activeSourcePage;
+    return state != null &&
+        source != null &&
+        state._syncSnapshotKeys.contains(source.key);
+  }
 
   void _attach(_ReaderShaderPageCurlState state) => _state = state;
 
@@ -114,43 +101,18 @@ class ReaderPageCurlCoordinator extends ChangeNotifier {
   ReaderPageCurlCoordinator({this.gutterWidth = 0})
     : assert(gutterWidth >= 0 && gutterWidth.isFinite);
 
-  /// Width of the visual gutter centered on a tablet spread's binding.
+  /// The fixed visual gap between the two leaves in a tablet spread.
   ///
-  /// Half of this width is reserved inside each full-width paper leaf. The two
-  /// page-curl surfaces still meet at the exact center binding, so the animated
-  /// hinge never shifts to either outside edge of the visual gutter.
+  /// A coordinated leaf uses this together with its own width when painting
+  /// the folded sheet across the binding and onto the opposite leaf.
   final double gutterWidth;
 
   Object? _owner;
-  final Map<ReaderPageBindingEdge, _ReaderShaderPageCurlState> _leaves = {};
   final ValueNotifier<ReaderPageBindingEdge?> _activeBindingEdge =
       ValueNotifier(null);
   bool _availableAfterFrame = true;
   bool _notificationScheduled = false;
   bool _disposed = false;
-
-  void _attachLeaf(
-    ReaderPageBindingEdge bindingEdge,
-    _ReaderShaderPageCurlState leaf,
-  ) {
-    if (_disposed) return;
-    _leaves[bindingEdge] = leaf;
-  }
-
-  void _detachLeaf(
-    ReaderPageBindingEdge bindingEdge,
-    _ReaderShaderPageCurlState leaf,
-  ) {
-    if (identical(_leaves[bindingEdge], leaf)) {
-      _leaves.remove(bindingEdge);
-    }
-  }
-
-  _ReaderShaderPageCurlState? _leafFor(ReaderPageTurnDirection direction) =>
-      _leaves[switch (direction) {
-        ReaderPageTurnDirection.forward => ReaderPageBindingEdge.left,
-        ReaderPageTurnDirection.backward => ReaderPageBindingEdge.right,
-      }];
 
   bool _tryAcquire(Object owner, ReaderPageBindingEdge bindingEdge) {
     if (_disposed) return false;
@@ -194,7 +156,6 @@ class ReaderPageCurlCoordinator extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _owner = null;
-    _leaves.clear();
     _activeBindingEdge.dispose();
     super.dispose();
   }
@@ -224,8 +185,10 @@ class ReaderPageCurlSpread extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final leafWidth = math.max(0.0, constraints.maxWidth / 2);
-        final halfGutter = math.min(leafWidth, coordinator.gutterWidth / 2);
+        final leafWidth = math.max(
+          0.0,
+          (constraints.maxWidth - coordinator.gutterWidth) / 2,
+        );
         return AnimatedBuilder(
           animation: coordinator.activeBindingEdgeListenable,
           builder: (context, _) {
@@ -239,34 +202,30 @@ class ReaderPageCurlSpread extends StatelessWidget {
             );
             final rightLayer = Positioned(
               key: const ValueKey('reader-page-curl-spread-right-layer'),
-              left: leafWidth,
+              left: leafWidth + coordinator.gutterWidth,
               top: 0,
               bottom: 0,
               width: leafWidth,
               child: right ?? const SizedBox.expand(),
             );
-            final activeBindingEdge = coordinator.activeBindingEdge;
             final leftIsActive =
-                activeBindingEdge == ReaderPageBindingEdge.right;
-            final gutterLayer = Positioned(
-              key: const ValueKey('reader-page-curl-spread-gutter-layer'),
-              left: leafWidth - halfGutter,
-              top: 0,
-              bottom: 0,
-              width: coordinator.gutterWidth,
-              child: IgnorePointer(child: gutter),
-            );
+                coordinator.activeBindingEdge == ReaderPageBindingEdge.right;
             return Stack(
               key: const ValueKey('reader-page-curl-spread-layer-stack'),
               fit: StackFit.expand,
               clipBehavior: Clip.none,
-              children: activeBindingEdge == null
-                  ? [leftLayer, rightLayer, gutterLayer]
-                  : [
-                      if (leftIsActive) rightLayer else leftLayer,
-                      gutterLayer,
-                      if (leftIsActive) leftLayer else rightLayer,
-                    ],
+              children: [
+                Positioned(
+                  key: const ValueKey('reader-page-curl-spread-gutter-layer'),
+                  left: leafWidth,
+                  top: 0,
+                  bottom: 0,
+                  width: coordinator.gutterWidth,
+                  child: IgnorePointer(child: gutter),
+                ),
+                if (leftIsActive) rightLayer else leftLayer,
+                if (leftIsActive) leftLayer else rightLayer,
+              ],
             );
           },
         );
@@ -325,9 +284,8 @@ class ReaderShaderPageCurl extends StatefulWidget {
 
   /// Restricts interactive turns to the free outer edge.
   ///
-  /// Tablet reader spreads leave this disabled so either half of a leaf can
-  /// start its one available turn direction. Programmatic turns remain
-  /// available for taps and keys.
+  /// A two-page spread enables this on each half so the center spine cannot
+  /// start a page turn. Programmatic turns remain available for taps and keys.
   final bool edgeDragOnly;
 
   @override

@@ -130,7 +130,7 @@ class ReaderTopInformationBar extends StatelessWidget {
                 if (time.isNotEmpty) Text(time, style: style),
                 if (time.isNotEmpty && batteryIndicator != null)
                   const SizedBox(width: 8),
-                ?batteryIndicator,
+                if (batteryIndicator != null) batteryIndicator,
               ],
             ),
           ),

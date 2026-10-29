@@ -7,13 +7,13 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:xxread/services/core/database_service.dart';
 
 class WebBookFileStore {
-  WebBookFileStore({Future<Database> Function()? database})
-    : _databaseProvider = database ?? (() => DatabaseService().database);
+  WebBookFileStore({DatabaseService? databaseService})
+    : _databaseService = databaseService ?? DatabaseService();
 
   static const String pathPrefix = 'web-book://';
   static final RegExp _hashPattern = RegExp(r'^(?:[a-f0-9]{32}|[a-f0-9]{64})$');
 
-  final Future<Database> Function() _databaseProvider;
+  final DatabaseService _databaseService;
   Future<void>? _initializing;
 
   static bool isWebBookPath(String path) => path.startsWith(pathPrefix);
@@ -82,7 +82,7 @@ class WebBookFileStore {
   }
 
   Future<Database> _readyDatabase() async {
-    final database = await _databaseProvider();
+    final database = await _databaseService.database;
     await (_initializing ??= _createTable(database));
     return database;
   }

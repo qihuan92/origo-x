@@ -1,7 +1,9 @@
 // 文件说明：应用设置服务，负责全局偏好项的读取与变更通知。
-// 技术要点：服务层、SharedPreferences、Flutter、本地字体恢复与变更通知。
+// 技术要点：服务层、SharedPreferences、Flutter、OnlineFontService 进度回调驱动 UI 刷新。
 
-import 'package:flutter/foundation.dart' show listEquals, setEquals;
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,19 +11,21 @@ import '../../models/home_navigation_destination.dart';
 import '../../utils/font_catalog_helper.dart';
 import '../../utils/page_transitions.dart';
 import 'custom_font_service.dart';
-import 'display_refresh_rate_controller.dart';
+import 'online_font_service.dart';
+
+const String additionalSourceProtocolsPreferenceKey =
+    'additional_source_protocols_v1';
 
 enum LibraryLayoutMode { card, grid }
 
 class AppSettingsNotifier extends ChangeNotifier {
-  static const appTextScaleFactors = <double>[0.9, 1.0, 1.1, 1.2, 1.3];
-  static const defaultAppTextScaleLevel = 1;
-  static const _keyAppTextScaleLevel = 'app_text_scale_level_v1';
+  static const Duration _onlineFontProgressInterval = Duration(
+    milliseconds: 100,
+  );
   static const String _keyAppLocale = 'app_locale';
   static const String _keyLegacyLocale = 'language';
   static const String _keyAppFontId = 'app_font_id_v2';
   static const String _keyReaderFontId = 'reader_font_id_v2';
-  static const String _keyEpubReaderFontId = 'epub_reader_font_id_v1';
   static const String _keyLegacyAppFontFamily = 'app_font_family';
   static const String _keyHideNavigationLabels =
       'hide_home_navigation_labels_v1';
@@ -39,20 +43,16 @@ class AppSettingsNotifier extends ChangeNotifier {
       'library_grid_show_details_v1';
   static const String _keyLibraryBookOpenAnimation =
       'library_book_open_animation_v1';
-  static const String _keyLibraryBookOpenAnimationPace =
-      'library_book_open_animation_pace_v1';
 
   Locale? _locale;
   String _localeCode = 'system';
-  int _appTextScaleLevel = defaultAppTextScaleLevel;
   String _appFontId = FontCatalog.defaultAppFont.id;
   String _readerFontId = FontCatalog.defaultReaderFont.id;
-  String _epubReaderFontId = FontCatalog.bookEmbeddedId;
   bool _hideNavigationLabels = true;
   List<HomeNavigationDestination> _homeNavigationOrder =
       defaultHomeNavigationOrder;
   Set<HomeNavigationDestination> _hiddenHomeNavigationDestinations =
-      defaultHiddenHomeNavigationDestinations;
+      const <HomeNavigationDestination>{};
   bool _customizeFloatingNavigationSize = false;
   double _floatingNavigationHeight = 60;
   double _floatingNavigationHorizontalMargin = 24;
@@ -61,30 +61,26 @@ class AppSettingsNotifier extends ChangeNotifier {
   bool _libraryGridShowDetails = true;
   LibraryBookOpenAnimation _libraryBookOpenAnimation =
       LibraryBookOpenAnimation.minimalFade;
-  LibraryBookOpenAnimationPace _libraryBookOpenAnimationPace =
-      LibraryBookOpenAnimationPace.fast;
-  bool _powerSavingMode = false;
+  bool _additionalSourceProtocolsEnabled = false;
   bool _isInitialized = false;
   final CustomFontService _customFontService;
-  final DisplayRefreshRateController _displayRefreshRateController;
+  final OnlineFontService _onlineFontService;
+  final ChangeNotifier _onlineFontProgressNotifier = ChangeNotifier();
+  Timer? _onlineFontProgressTimer;
   bool _isDisposed = false;
 
   AppSettingsNotifier({
     CustomFontService? customFontService,
-    DisplayRefreshRateController? displayRefreshRateController,
+    OnlineFontService? onlineFontService,
   }) : _customFontService = customFontService ?? CustomFontService(),
-       _displayRefreshRateController =
-           displayRefreshRateController ?? DisplayRefreshRateController() {
+       _onlineFontService = onlineFontService ?? OnlineFontService() {
     _loadSettings();
   }
 
   Locale? get locale => _locale;
   String get localeCode => _localeCode;
-  int get appTextScaleLevel => _appTextScaleLevel;
-  double get appTextScaleFactor => appTextScaleFactors[_appTextScaleLevel];
   String get appFontId => _appFontId;
   String get readerFontId => _readerFontId;
-  String get epubReaderFontId => _epubReaderFontId;
   bool get hideNavigationLabels => _hideNavigationLabels;
   bool get showNavigationLabels => !_hideNavigationLabels;
   List<HomeNavigationDestination> get homeNavigationOrder =>
@@ -113,11 +109,10 @@ class AppSettingsNotifier extends ChangeNotifier {
   bool get libraryGridShowDetails => _libraryGridShowDetails;
   LibraryBookOpenAnimation get libraryBookOpenAnimation =>
       _libraryBookOpenAnimation;
-  LibraryBookOpenAnimationPace get libraryBookOpenAnimationPace =>
-      _libraryBookOpenAnimationPace;
-  bool get powerSavingMode => _powerSavingMode;
+  bool get additionalSourceProtocolsEnabled =>
+      _additionalSourceProtocolsEnabled;
 
-  /// 用户自定义导入的本地字体列表。
+  /// 用户自定义导入的字体列表（在线字体不在此列）。
   List<FontOption> get customFonts => _customFontService.fonts
       .map(
         (font) => FontOption(
@@ -130,15 +125,13 @@ class AppSettingsNotifier extends ChangeNotifier {
           fileSize: font.fileSize,
           isCustom: true,
           isAvailable: font.available,
-          variableWeightMin: font.variableWeightMin,
-          variableWeightMax: font.variableWeightMax,
         ),
       )
       .toList(growable: false);
   List<FontOption> get availableCustomFonts =>
       customFonts.where((font) => font.isAvailable).toList(growable: false);
 
-  /// 当前可用的 App 字体选项：系统字体与用户导入的本地字体。
+  /// 当前可用的 App 字体选项：系统字体 + 在线字体（区分已下载/未下载）+ 已加载的自定义字体。
   List<FontOption> get appFontOptions => <FontOption>[
     ...FontCatalog.appFonts,
     ...availableCustomFonts,
@@ -154,28 +147,132 @@ class AppSettingsNotifier extends ChangeNotifier {
     _readerFontId,
     customFonts: availableCustomFonts,
   );
-  FontOption get epubReaderFont => FontCatalog.epubReaderFontForId(
-    _epubReaderFontId,
-    customFonts: availableCustomFonts,
-  );
   String? get appFontFamily => appFont.family;
   bool get customFontImportSupported => _customFontService.isSupported;
+  bool get onlineFontDownloadSupported => _onlineFontService.isSupported;
   bool get isInitialized => _isInitialized;
+
+  /// 独立的在线字体下载进度监听器。
+  ///
+  /// 下载进度不再通过 AppSettingsNotifier 的全局通知广播，避免 MaterialApp、
+  /// 当前页面和字体弹窗在每个网络数据块到达时同时重建。
+  Listenable get onlineFontProgressListenable => _onlineFontProgressNotifier;
+
+  /// 在线字体是否已下载完成（可用于选择）。
+  bool isOnlineFontDownloaded(String fontId) =>
+      _onlineFontService.isSupported && _onlineFontService.isDownloaded(fontId);
+
+  /// 在线字体当前的下载进度；未在下载中返回 null。
+  OnlineFontDownloadProgress? onlineFontProgress(String fontId) =>
+      _onlineFontService.progressFor(fontId);
+
+  /// 触发在线字体下载。下载完成后通知 UI 刷新；失败时设置错误状态供 UI 显示重试按钮。
+  /// [domain] 用于下载成功后自动应用该字体到 App 或阅读域；传 null 仅下载不切换。
+  Future<void> downloadOnlineFont(String fontId, {FontDomain? domain}) async {
+    if (!_onlineFontService.isSupported) return;
+    final option = _resolveOnlineFontOption(fontId);
+    if (option == null) return; // 不是在线字体
+    if (isOnlineFontDownloaded(fontId)) {
+      // 已下载，确保已加载即可。
+      await _onlineFontService.ensureLoaded(
+        fontId,
+        files: option.downloadFiles,
+        family: option.family!,
+      );
+      if (domain != null) {
+        await _applyDownloadedFont(domain, fontId);
+        notifyListeners();
+      }
+      return;
+    }
+    try {
+      await _onlineFontService.download(
+        fontId: fontId,
+        family: option.family!,
+        files: option.downloadFiles,
+        onProgress: _handleOnlineFontProgress,
+      );
+      if (domain != null) {
+        await _applyDownloadedFont(domain, fontId);
+        notifyListeners();
+      }
+    } on OnlineFontException {
+      // 失败状态已通过 progressFor() 暴露给 UI，无需额外处理。
+      _flushOnlineFontProgress();
+    }
+  }
+
+  void _handleOnlineFontProgress(OnlineFontDownloadProgress progress) {
+    if (_isDisposed) return;
+    if (progress.status != OnlineFontDownloadStatus.downloading) {
+      _flushOnlineFontProgress();
+      return;
+    }
+    if (_onlineFontProgressTimer != null) return;
+    _onlineFontProgressTimer = Timer(_onlineFontProgressInterval, () {
+      _onlineFontProgressTimer = null;
+      if (!_isDisposed) _onlineFontProgressNotifier.notifyListeners();
+    });
+  }
+
+  void _flushOnlineFontProgress() {
+    if (_isDisposed) return;
+    _onlineFontProgressTimer?.cancel();
+    _onlineFontProgressTimer = null;
+    _onlineFontProgressNotifier.notifyListeners();
+  }
+
+  Future<void> deleteOnlineFont(String fontId) async {
+    if (!_onlineFontService.isSupported) return;
+    final prefs = await SharedPreferences.getInstance();
+    var selectionChanged = false;
+    if (_appFontId == fontId) {
+      _appFontId = FontCatalog.defaultAppFont.id;
+      await prefs.setString(_keyAppFontId, _appFontId);
+      selectionChanged = true;
+    }
+    if (_readerFontId == fontId) {
+      _readerFontId = FontCatalog.defaultReaderFont.id;
+      await prefs.setString(_keyReaderFontId, _readerFontId);
+      selectionChanged = true;
+    }
+    if (selectionChanged) notifyListeners();
+    await _onlineFontService.deleteDownload(fontId);
+    notifyListeners();
+  }
+
+  FontOption? _resolveOnlineFontOption(String fontId) {
+    for (final option in FontCatalog.appFonts) {
+      if (option.id == fontId && option.isOnline) return option;
+    }
+    for (final option in FontCatalog.readerFonts) {
+      if (option.id == fontId && option.isOnline) return option;
+    }
+    return null;
+  }
+
+  Future<void> _applyDownloadedFont(FontDomain domain, String fontId) async {
+    switch (domain) {
+      case FontDomain.app:
+        _appFontId = fontId;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyAppFontId, fontId);
+        break;
+      case FontDomain.reader:
+        _readerFontId = fontId;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyReaderFontId, fontId);
+        break;
+    }
+  }
 
   Future<void> _loadSettings() async {
     await _customFontService.initialize();
+    await _onlineFontService.initialize();
     final prefs = await SharedPreferences.getInstance();
-    if (_isDisposed) return;
     final storedLocale =
         prefs.getString(_keyAppLocale) ?? prefs.getString(_keyLegacyLocale);
     _applyLocaleCode(storedLocale ?? 'system', notify: false);
-    final storedTextScaleLevel = prefs.get(_keyAppTextScaleLevel);
-    _appTextScaleLevel =
-        storedTextScaleLevel is int &&
-            storedTextScaleLevel >= 0 &&
-            storedTextScaleLevel < appTextScaleFactors.length
-        ? storedTextScaleLevel
-        : defaultAppTextScaleLevel;
     final storedAppFontId = prefs.getString(_keyAppFontId);
     if (storedAppFontId != null) {
       _appFontId = FontCatalog.appFontForId(
@@ -191,10 +288,6 @@ class AppSettingsNotifier extends ChangeNotifier {
     }
     _readerFontId = FontCatalog.readerFontForId(
       prefs.getString(_keyReaderFontId),
-      customFonts: availableCustomFonts,
-    ).id;
-    _epubReaderFontId = FontCatalog.epubReaderFontForId(
-      prefs.getString(_keyEpubReaderFontId) ?? FontCatalog.bookEmbeddedId,
       customFonts: availableCustomFonts,
     ).id;
     _hideNavigationLabels = prefs.getBool(_keyHideNavigationLabels) ?? true;
@@ -233,69 +326,64 @@ class AppSettingsNotifier extends ChangeNotifier {
       _ => 2,
     };
     _libraryGridShowDetails = prefs.getBool(_keyLibraryGridShowDetails) ?? true;
-    _libraryBookOpenAnimation = switch (prefs.getString(
-      _keyLibraryBookOpenAnimation,
-    )) {
-      'classicCover' => LibraryBookOpenAnimation.classicCover,
-      'paperRise' => LibraryBookOpenAnimation.paperRise,
-      'pageSlide' => LibraryBookOpenAnimation.pageSlide,
-      _ => LibraryBookOpenAnimation.minimalFade,
-    };
-    _libraryBookOpenAnimationPace = switch (prefs.getString(
-      _keyLibraryBookOpenAnimationPace,
-    )) {
-      'fast' => LibraryBookOpenAnimationPace.fast,
-      'elegant' => LibraryBookOpenAnimationPace.elegant,
-      _ => LibraryBookOpenAnimationPace.fast,
-    };
-    _powerSavingMode =
-        prefs.getBool(DisplayRefreshRateController.preferenceKey) ?? false;
+    _libraryBookOpenAnimation = LibraryBookOpenAnimation.values.firstWhere(
+      (mode) => mode.name == prefs.getString(_keyLibraryBookOpenAnimation),
+      orElse: () => LibraryBookOpenAnimation.minimalFade,
+    );
+    _additionalSourceProtocolsEnabled =
+        prefs.getBool(additionalSourceProtocolsPreferenceKey) ?? false;
     await _restoreSelectedFonts(prefs);
     _isInitialized = true;
     notifyListeners();
   }
 
-  /// 启动时恢复用户导入的字体；文件缺失时回退系统字体。
+  /// 启动时恢复已选字体的运行时注册：
+  /// - 自定义字体：通过 CustomFontService.ensureLoaded 加载；文件缺失则回退默认
+  /// - 在线字体：通过 OnlineFontService.ensureLoaded 加载；未下载则回退默认
   Future<void> _restoreSelectedFonts(SharedPreferences prefs) async {
-    _appFontId = await _restoreFontSelection(
-      prefs: prefs,
-      key: _keyAppFontId,
-      option: appFont,
-      fallbackId: FontCatalog.defaultAppFont.id,
+    final appOption = FontCatalog.appFontForId(
+      _appFontId,
+      customFonts: availableCustomFonts,
     );
-    _readerFontId = await _restoreFontSelection(
-      prefs: prefs,
-      key: _keyReaderFontId,
-      option: readerFont,
-      fallbackId: FontCatalog.defaultReaderFont.id,
-    );
-    _epubReaderFontId = await _restoreFontSelection(
-      prefs: prefs,
-      key: _keyEpubReaderFontId,
-      option: epubReaderFont,
-      fallbackId: FontCatalog.bookEmbeddedId,
-    );
-  }
-
-  Future<String> _restoreFontSelection({
-    required SharedPreferences prefs,
-    required String key,
-    required FontOption option,
-    required String fallbackId,
-  }) async {
-    if (await _ensureFontLoaded(option)) return option.id;
-    debugPrint(
-      'Selected font could not be loaded (${option.id}); resetting $key',
-    );
-    await prefs.setString(key, fallbackId);
-    return fallbackId;
-  }
-
-  Future<bool> _ensureFontLoaded(FontOption option) async {
-    if (option.isCustom) {
-      return _customFontService.ensureLoaded(option.id);
+    if (appOption.isCustom) {
+      if (!await _customFontService.ensureLoaded(_appFontId)) {
+        _appFontId = FontCatalog.defaultAppFont.id;
+        await prefs.setString(_keyAppFontId, _appFontId);
+      }
+    } else if (appOption.isOnline) {
+      if (isOnlineFontDownloaded(_appFontId)) {
+        await _onlineFontService.ensureLoaded(
+          _appFontId,
+          files: appOption.downloadFiles,
+          family: appOption.family!,
+        );
+      } else {
+        // 用户之前选过但尚未下载（例如刚升级到在线字体版本），先回退系统字体。
+        _appFontId = FontCatalog.defaultAppFont.id;
+        await prefs.setString(_keyAppFontId, _appFontId);
+      }
     }
-    return true;
+    final readerOption = FontCatalog.readerFontForId(
+      _readerFontId,
+      customFonts: availableCustomFonts,
+    );
+    if (readerOption.isCustom) {
+      if (!await _customFontService.ensureLoaded(_readerFontId)) {
+        _readerFontId = FontCatalog.defaultReaderFont.id;
+        await prefs.setString(_keyReaderFontId, _readerFontId);
+      }
+    } else if (readerOption.isOnline) {
+      if (isOnlineFontDownloaded(_readerFontId)) {
+        await _onlineFontService.ensureLoaded(
+          _readerFontId,
+          files: readerOption.downloadFiles,
+          family: readerOption.family!,
+        );
+      } else {
+        _readerFontId = FontCatalog.defaultReaderFont.id;
+        await prefs.setString(_keyReaderFontId, _readerFontId);
+      }
+    }
   }
 
   void _applyLocaleCode(String code, {bool notify = true}) {
@@ -318,18 +406,6 @@ class AppSettingsNotifier extends ChangeNotifier {
     return Locale(parts[0]);
   }
 
-  Future<void> setAppTextScaleLevel(int level) async {
-    if (level < 0 ||
-        level >= appTextScaleFactors.length ||
-        level == _appTextScaleLevel) {
-      return;
-    }
-    _appTextScaleLevel = level;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_keyAppTextScaleLevel, level);
-  }
-
   Future<void> setLocaleCode(String code) async {
     _applyLocaleCode(code);
     final prefs = await SharedPreferences.getInstance();
@@ -337,17 +413,25 @@ class AppSettingsNotifier extends ChangeNotifier {
     await prefs.setString(_keyLegacyLocale, code);
   }
 
+  /// 设置 App 字体 ID。在线字体未下载时直接返回不切换——UI 应通过
+  /// downloadOnlineFont() 触发下载完成后再调用本方法。
   Future<void> setAppFontId(String id) async {
     final normalized = FontCatalog.appFontForId(
       id,
       customFonts: availableCustomFonts,
     ).id;
     if (normalized == _appFontId) return;
+    if (normalized.startsWith('custom_') &&
+        !await _customFontService.ensureLoaded(normalized)) {
+      return;
+    }
     final option = FontCatalog.appFontForId(
       normalized,
       customFonts: availableCustomFonts,
     );
-    if (!await _ensureFontLoaded(option)) return;
+    if (option.isOnline && !isOnlineFontDownloaded(normalized)) {
+      return;
+    }
     _appFontId = normalized;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
@@ -360,32 +444,21 @@ class AppSettingsNotifier extends ChangeNotifier {
       customFonts: availableCustomFonts,
     ).id;
     if (normalized == _readerFontId) return;
+    if (normalized.startsWith('custom_') &&
+        !await _customFontService.ensureLoaded(normalized)) {
+      return;
+    }
     final option = FontCatalog.readerFontForId(
       normalized,
       customFonts: availableCustomFonts,
     );
-    if (!await _ensureFontLoaded(option)) return;
+    if (option.isOnline && !isOnlineFontDownloaded(normalized)) {
+      return;
+    }
     _readerFontId = normalized;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyReaderFontId, normalized);
-  }
-
-  Future<void> setEpubReaderFontId(String id) async {
-    final normalized = FontCatalog.epubReaderFontForId(
-      id,
-      customFonts: availableCustomFonts,
-    ).id;
-    if (normalized == _epubReaderFontId) return;
-    final option = FontCatalog.epubReaderFontForId(
-      normalized,
-      customFonts: availableCustomFonts,
-    );
-    if (!await _ensureFontLoaded(option)) return;
-    _epubReaderFontId = normalized;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyEpubReaderFontId, normalized);
   }
 
   Future<void> setHideNavigationLabels(bool value) async {
@@ -463,20 +536,11 @@ class AppSettingsNotifier extends ChangeNotifier {
 
   Future<void> resetHomeNavigationOrder() async {
     await setHomeNavigationOrder(defaultHomeNavigationOrder);
-    if (!setEquals(
-      _hiddenHomeNavigationDestinations,
-      defaultHiddenHomeNavigationDestinations,
-    )) {
-      _hiddenHomeNavigationDestinations =
-          defaultHiddenHomeNavigationDestinations;
+    if (_hiddenHomeNavigationDestinations.isNotEmpty) {
+      _hiddenHomeNavigationDestinations = const <HomeNavigationDestination>{};
       notifyListeners();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _keyHomeNavigationHidden,
-        defaultHiddenHomeNavigationDestinations
-            .map((destination) => destination.storageId)
-            .toList(growable: false),
-      );
+      await prefs.setStringList(_keyHomeNavigationHidden, const <String>[]);
     }
   }
 
@@ -515,23 +579,12 @@ class AppSettingsNotifier extends ChangeNotifier {
     await prefs.setString(_keyLibraryBookOpenAnimation, animation.name);
   }
 
-  Future<void> setLibraryBookOpenAnimationPace(
-    LibraryBookOpenAnimationPace pace,
-  ) async {
-    if (_libraryBookOpenAnimationPace == pace) return;
-    _libraryBookOpenAnimationPace = pace;
+  Future<void> setAdditionalSourceProtocolsEnabled(bool value) async {
+    if (_additionalSourceProtocolsEnabled == value) return;
+    _additionalSourceProtocolsEnabled = value;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyLibraryBookOpenAnimationPace, pace.name);
-  }
-
-  Future<void> setPowerSavingMode(bool value) async {
-    if (_powerSavingMode == value) return;
-    _powerSavingMode = value;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(DisplayRefreshRateController.preferenceKey, value);
-    await _displayRefreshRateController.apply(value);
+    await prefs.setBool(additionalSourceProtocolsPreferenceKey, value);
   }
 
   Future<void> prepareCustomFontPreviews() async {
@@ -549,9 +602,6 @@ class AppSettingsNotifier extends ChangeNotifier {
         break;
       case FontDomain.reader:
         await setReaderFontId(imported.id);
-        break;
-      case FontDomain.epubReader:
-        await setEpubReaderFontId(imported.id);
         break;
       case null:
         break;
@@ -577,23 +627,19 @@ class AppSettingsNotifier extends ChangeNotifier {
       await prefs.setString(_keyReaderFontId, _readerFontId);
       selectionChanged = true;
     }
-    if (_epubReaderFontId == id) {
-      _epubReaderFontId = FontCatalog.bookEmbeddedId;
-      await prefs.setString(_keyEpubReaderFontId, _epubReaderFontId);
-      selectionChanged = true;
-    }
     if (selectionChanged) notifyListeners();
     await _customFontService.deleteFont(id);
     notifyListeners();
   }
 
   bool isAppFont(String id) => _appFontId == id;
-  bool isReaderFont(String id) =>
-      _readerFontId == id || _epubReaderFontId == id;
+  bool isReaderFont(String id) => _readerFontId == id;
 
   @override
   void dispose() {
     _isDisposed = true;
+    _onlineFontProgressTimer?.cancel();
+    _onlineFontProgressNotifier.dispose();
     super.dispose();
   }
 }

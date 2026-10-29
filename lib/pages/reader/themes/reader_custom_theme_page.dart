@@ -8,7 +8,6 @@ import 'package:xxread/utils/reader_themes.dart';
 import 'package:xxread/widgets/reader_settings_controls.dart';
 import 'package:xxread/widgets/reader_theme_background.dart';
 import 'package:xxread/widgets/side_toast.dart';
-import 'package:xxread/widgets/floating_subpage_scaffold.dart';
 
 class ReaderCustomThemePage extends StatefulWidget {
   const ReaderCustomThemePage({
@@ -145,164 +144,166 @@ class _ReaderCustomThemePageState extends State<ReaderCustomThemePage> {
     final contrast = _contrastRatio(_theme.text, _theme.background);
     return Theme(
       data: themeData,
-      child: FloatingSubpageScaffold(
-        title: widget.isNewTheme
-            ? context.l10n.readerCustomThemeNewTitle
-            : context.l10n.readerCustomThemeEditTitle,
+      child: Scaffold(
         backgroundColor: palette.background,
-        decoration: BoxDecoration(color: palette.background),
-        actions: [
-          TextButton(
-            onPressed: _resetTheme,
-            child: Text(context.l10n.readerCustomThemeReset),
+        appBar: AppBar(
+          title: Text(
+            widget.isNewTheme
+                ? context.l10n.readerCustomThemeNewTitle
+                : context.l10n.readerCustomThemeEditTitle,
           ),
-        ],
-        body: ListView(
-          padding: floatingSubpagePadding(
-            context,
-            left: 18,
-            top: 18,
-            right: 18,
-            bottom: 120,
-          ),
-          children: [
-            TextField(
-              key: const ValueKey('custom-theme-name'),
-              controller: _nameController,
-              maxLength: 24,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(
-                labelText: context.l10n.readerCustomThemeName,
-                hintText: context.l10n.readerCustomThemeNameHint,
-                counterText: '',
-                prefixIcon: const Icon(Icons.label_outline_rounded),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+          actions: [
+            TextButton(
+              onPressed: _resetTheme,
+              child: Text(context.l10n.readerCustomThemeReset),
+            ),
+            const SizedBox(width: 6),
+          ],
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
+            children: [
+              TextField(
+                key: const ValueKey('custom-theme-name'),
+                controller: _nameController,
+                maxLength: 24,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: context.l10n.readerCustomThemeName,
+                  hintText: context.l10n.readerCustomThemeNameHint,
+                  counterText: '',
+                  prefixIcon: const Icon(Icons.label_outline_rounded),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
-            _ReaderThemePreview(palette: palette),
-            const SizedBox(height: 24),
-            Text(
-              context.l10n.readerCustomThemeColors,
-              style: themeData.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+              const SizedBox(height: 18),
+              _ReaderThemePreview(palette: palette),
+              const SizedBox(height: 24),
+              Text(
+                context.l10n.readerCustomThemeColors,
+                style: themeData.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            _ColorSettingTile(
-              key: const ValueKey('custom-theme-text-color'),
-              palette: palette,
-              icon: Icons.format_color_text_rounded,
-              title: context.l10n.readerCustomThemeTextColor,
-              subtitle: context.l10n.readerCustomThemeTextColorHint,
-              color: _theme.text,
-              onTap: () => _pickColor(
+              const SizedBox(height: 10),
+              _ColorSettingTile(
+                key: const ValueKey('custom-theme-text-color'),
+                palette: palette,
+                icon: Icons.format_color_text_rounded,
                 title: context.l10n.readerCustomThemeTextColor,
-                current: _theme.text,
-                onChanged: (color) => _theme = _theme.copyWith(text: color),
+                subtitle: context.l10n.readerCustomThemeTextColorHint,
+                color: _theme.text,
+                onTap: () => _pickColor(
+                  title: context.l10n.readerCustomThemeTextColor,
+                  current: _theme.text,
+                  onChanged: (color) => _theme = _theme.copyWith(text: color),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            _BackgroundImageSetting(
-              palette: palette,
-              hasImage: _theme.hasBackgroundImage,
-              supported: _backgroundService.isSupported,
-              onChoose: _pickBackgroundImage,
-              onRemove: _removeBackgroundImage,
-            ),
-            if (_theme.hasBackgroundImage) ...[
-              const SizedBox(height: 8),
-              ReaderSettingSlider(
-                label: context.l10n.readerCustomThemeImageStrength,
-                value: _theme.backgroundImageOpacity,
-                valueLabel: '${(_theme.backgroundImageOpacity * 100).round()}%',
-                min: 0.1,
-                max: 0.75,
-                divisions: 13,
-                onChanged: (value) => setState(
-                  () => _theme = _theme.copyWith(backgroundImageOpacity: value),
+              const SizedBox(height: 10),
+              _BackgroundImageSetting(
+                palette: palette,
+                hasImage: _theme.hasBackgroundImage,
+                supported: _backgroundService.isSupported,
+                onChoose: _pickBackgroundImage,
+                onRemove: _removeBackgroundImage,
+              ),
+              if (_theme.hasBackgroundImage) ...[
+                const SizedBox(height: 8),
+                ReaderSettingSlider(
+                  label: context.l10n.readerCustomThemeImageStrength,
+                  value: _theme.backgroundImageOpacity,
+                  valueLabel:
+                      '${(_theme.backgroundImageOpacity * 100).round()}%',
+                  min: 0.1,
+                  max: 0.75,
+                  divisions: 13,
+                  onChanged: (value) => setState(
+                    () =>
+                        _theme = _theme.copyWith(backgroundImageOpacity: value),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              _ColorSettingTile(
+                key: const ValueKey('custom-theme-background-color'),
+                palette: palette,
+                icon: Icons.menu_book_rounded,
+                title: context.l10n.readerCustomThemeBackground,
+                subtitle: context.l10n.readerCustomThemeBackgroundHint,
+                color: _theme.background,
+                onTap: () => _pickColor(
+                  title: context.l10n.readerCustomThemeBackground,
+                  current: _theme.background,
+                  onChanged: (color) =>
+                      _theme = _theme.copyWith(background: color),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _ColorSettingTile(
+                key: const ValueKey('custom-theme-control-color'),
+                palette: palette,
+                icon: Icons.tune_rounded,
+                title: context.l10n.readerCustomThemeControlBar,
+                subtitle: context.l10n.readerCustomThemeControlBarHint,
+                color: _theme.controlBar,
+                onTap: () => _pickColor(
+                  title: context.l10n.readerCustomThemeControlBar,
+                  current: _theme.controlBar,
+                  onChanged: (color) =>
+                      _theme = _theme.copyWith(controlBar: color),
+                ),
+              ),
+              const SizedBox(height: 14),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: contrast >= 4.5
+                      ? palette.controlFill.withValues(alpha: 0.7)
+                      : const Color(0xFFFFB74D).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: contrast >= 4.5
+                        ? palette.border
+                        : const Color(0xFFFF9800),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      contrast >= 4.5
+                          ? Icons.visibility_rounded
+                          : Icons.warning_amber_rounded,
+                      color: contrast >= 4.5
+                          ? palette.text
+                          : const Color(0xFFE67800),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        contrast >= 4.5
+                            ? context.l10n.readerCustomThemeContrastGood
+                            : context.l10n.readerCustomThemeContrastLow,
+                        style: themeData.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      contrast.toStringAsFixed(1),
+                      style: themeData.textTheme.labelLarge?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-            const SizedBox(height: 10),
-            _ColorSettingTile(
-              key: const ValueKey('custom-theme-background-color'),
-              palette: palette,
-              icon: Icons.menu_book_rounded,
-              title: context.l10n.readerCustomThemeBackground,
-              subtitle: context.l10n.readerCustomThemeBackgroundHint,
-              color: _theme.background,
-              onTap: () => _pickColor(
-                title: context.l10n.readerCustomThemeBackground,
-                current: _theme.background,
-                onChanged: (color) =>
-                    _theme = _theme.copyWith(background: color),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _ColorSettingTile(
-              key: const ValueKey('custom-theme-control-color'),
-              palette: palette,
-              icon: Icons.tune_rounded,
-              title: context.l10n.readerCustomThemeControlBar,
-              subtitle: context.l10n.readerCustomThemeControlBarHint,
-              color: _theme.controlBar,
-              onTap: () => _pickColor(
-                title: context.l10n.readerCustomThemeControlBar,
-                current: _theme.controlBar,
-                onChanged: (color) =>
-                    _theme = _theme.copyWith(controlBar: color),
-              ),
-            ),
-            const SizedBox(height: 14),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: contrast >= 4.5
-                    ? palette.controlFill.withValues(alpha: 0.7)
-                    : const Color(0xFFFFB74D).withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: contrast >= 4.5
-                      ? palette.border
-                      : const Color(0xFFFF9800),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    contrast >= 4.5
-                        ? Icons.visibility_rounded
-                        : Icons.warning_amber_rounded,
-                    color: contrast >= 4.5
-                        ? palette.text
-                        : const Color(0xFFE67800),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      contrast >= 4.5
-                          ? context.l10n.readerCustomThemeContrastGood
-                          : context.l10n.readerCustomThemeContrastLow,
-                      style: themeData.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    contrast.toStringAsFixed(1),
-                    style: themeData.textTheme.labelLarge?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
         bottomNavigationBar: SafeArea(
           minimum: const EdgeInsets.fromLTRB(18, 10, 18, 14),

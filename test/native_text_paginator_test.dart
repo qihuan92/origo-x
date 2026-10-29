@@ -1,9 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xxread/core/reader/native_text_paginator.dart';
-import 'package:xxread/core/reader/reader_margin_settings.dart';
-import 'package:xxread/core/reader/reader_settings.dart';
 
 const _heightBehavior = TextHeightBehavior(
   applyHeightToFirstAscent: true,
@@ -29,39 +28,54 @@ void main() {
     expect(readerBodyTextScaler.scale(19), 19);
   });
 
-  TestWidgetsFlutterBinding.ensureInitialized();
+  test('iOS system reader font pins the native Chinese fallback face', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
 
-  test('the widest typography still paginates on a small phone viewport', () {
-    const style = TextStyle(
-      fontSize: ReaderSettings.maxFontSize,
-      height: ReaderSettings.maxLineHeight,
-      letterSpacing: ReaderSettings.maxLetterSpacing,
-    );
-    final text = List.generate(
-      6,
-      (index) => '第$index段验证最大字号与最大页边距下的分页不会丢失正文。\n\n',
-    ).join();
-    // A 320x568 phone minus the widest horizontal and vertical margins.
-    const width = 320.0 - ReaderMarginSettings.horizontalMax * 2;
-    const height = 568.0 - ReaderMarginSettings.max * 2;
-    final paginator = NativeTextPaginator(
-      maxWidth: width,
-      maxHeight: height,
-      flowStyle: _flowStyle(style),
-    );
-
-    final pages = paginator.paginate(
-      text: text,
-      spanBuilder: (start, end) =>
-          TextSpan(text: text.substring(start, end), style: style),
-    );
-
-    expect(pages, isNotEmpty);
     expect(
-      pages.map((page) => text.substring(page.start, page.end)).join(),
-      text,
+      readerFontFamilyFallbacks(
+        fontFamily: null,
+        configuredFallbacks: const <String>[],
+        locale: const Locale('zh', 'CN'),
+      ),
+      const <String>['PingFang SC', 'PingFang TC'],
+    );
+    expect(
+      readerFontFamilyFallbacks(
+        fontFamily: null,
+        configuredFallbacks: const <String>[],
+        locale: const Locale.fromSubtags(
+          languageCode: 'zh',
+          scriptCode: 'Hant',
+        ),
+      ),
+      const <String>['PingFang TC', 'PingFang SC'],
     );
   });
+
+  test('reader font fallback keeps explicit and non-iOS choices intact', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    expect(
+      readerFontFamilyFallbacks(
+        fontFamily: null,
+        configuredFallbacks: const <String>[],
+        locale: const Locale('zh', 'CN'),
+      ),
+      isNull,
+    );
+    expect(
+      readerFontFamilyFallbacks(
+        fontFamily: 'CustomReaderFont',
+        configuredFallbacks: const <String>['FallbackFont'],
+        locale: const Locale('zh', 'CN'),
+      ),
+      const <String>['FallbackFont'],
+    );
+  });
+
+  TestWidgetsFlutterBinding.ensureInitialized();
 
   test('large text pages preserve content and fit complete visual lines', () {
     const style = TextStyle(fontSize: 32, height: 1.75, letterSpacing: 0.2);
